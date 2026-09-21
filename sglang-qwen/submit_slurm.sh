@@ -23,6 +23,7 @@ GPUS="${SLURM_GPUS:-1}"
 CPUS="${SLURM_CPUS:-12}"
 MEM="${SLURM_MEM:-120G}"
 TIME="${SLURM_TIME:-24:00:00}"
+NODELIST=""
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -51,6 +52,10 @@ while [[ $# -gt 0 ]]; do
             TIME="$2"
             shift 2
             ;;
+        -w|--nodelist)
+            NODELIST="$2"
+            shift 2
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -75,7 +80,10 @@ echo "🔹 計費專案 (Account) : $ACCOUNT"
 echo "🔹 GPU 配置           : $GPUS Core H200 GPU (--gres=gpu:H200:$GPUS)"
 echo "🔹 CPU / RAM          : $CPUS Cores / $MEM"
 echo "🔹 執行時間上限       : $TIME"
-echo "🔹 服務連接埠 (Port)  : ${PORT:-30000}"
+if [ -n "$NODELIST" ]; then
+    echo "🔹 指定節點 (Node)    : $NODELIST"
+fi
+echo "🔹 服務連接埠 (Port)  : ${PORT:-30000} (同機衝突時將自動遞增)"
 echo "=================================================================="
 
 SBATCH_ARGS=(
@@ -87,6 +95,10 @@ SBATCH_ARGS=(
     --time="$TIME"
     --chdir="$SCRIPT_DIR"
 )
+
+if [ -n "$NODELIST" ]; then
+    SBATCH_ARGS+=(--nodelist="$NODELIST")
+fi
 
 if [ "$DRY_RUN" = true ]; then
     echo "[Dry-Run] 預覽 sbatch 提交指令："

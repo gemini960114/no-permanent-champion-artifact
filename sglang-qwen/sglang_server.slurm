@@ -79,7 +79,77 @@ fi
 
 NODE_HOSTNAME="$(hostname)"
 NODE_IP="$(hostname -I | awk '{print $1}')"
-PORT="${PORT:-30000}"
+
+# ------------------------------------------------------------------------------
+# 動態可用 Port 偵測 (防同節點多實例/多模型 Port 碰撞)
+# ------------------------------------------------------------------------------
+find_available_port() {
+    local candidate="${1:-30000}"
+    local max_attempts=100
+    local attempt=0
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        if python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.bind(('0.0.0.0', int(sys.argv[1])))
+    s.close()
+    sys.exit(0)
+except OSError:
+    sys.exit(1)
+" "$candidate" 2>/dev/null; then
+            echo "$candidate"
+            return 0
+        fi
+        echo "⚠️ Port $candidate 已被同節點其他程序佔用，自動嘗試下一個 Port $((candidate + 1))..." >&2
+        ((candidate++))
+        ((attempt++))
+    done
+    echo "❌ 錯誤：找不到可用 Port (嘗試至 $candidate)" >&2
+    return 1
+}
+
+BASE_PORT="${PORT:-30000}"
+ACTUAL_PORT=$(find_available_port "$BASE_PORT")
+PORT="$ACTUAL_PORT"
+
+# ------------------------------------------------------------------------------
+# 端點登錄檔 (Endpoint Registry) 與生命週期清理
+# ------------------------------------------------------------------------------
+PROJECT_ROOT="$(cd "$WORK_DIR/.." && pwd)"
+REGISTRY_DIR="$PROJECT_ROOT/runtime/endpoints"
+mkdir -p -m 700 "$REGISTRY_DIR" 2>/dev/null || true
+chmod 700 "$REGISTRY_DIR" 2>/dev/null || true
+
+ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env"
+
+publish_endpoint() {
+    local state="${1:-ready}"
+    local tmp_file="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env.tmp.$$"
+    cat > "$tmp_file" <<EOF
+MODEL_NAME=Qwen3.8-27B
+MODEL_ALIAS=qwen3.8
+RESOLVED_MODEL_PATH=${RESOLVED_MODEL_PATH}
+NODE_HOSTNAME=${NODE_HOSTNAME}
+NODE_IP=${NODE_IP}
+PORT=${PORT}
+ENDPOINT=http://${NODE_HOSTNAME}:${PORT}
+API_BASE=http://${NODE_HOSTNAME}:${PORT}/v1
+SLURM_JOB_ID=${SLURM_JOB_ID:-N/A}
+STATE=${state}
+UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+EOF
+    mv -f "$tmp_file" "$ENDPOINT_REGISTRY_FILE"
+    chmod 600 "$ENDPOINT_REGISTRY_FILE" 2>/dev/null || true
+}
+
+cleanup_endpoint() {
+    echo "🛑 SGLang 服務正在停止 (Job: ${SLURM_JOB_ID:-N/A})..."
+    if [ -f "$ENDPOINT_REGISTRY_FILE" ]; then
+        rm -f "$ENDPOINT_REGISTRY_FILE" 2>/dev/null || true
+    fi
+}
+trap cleanup_endpoint EXIT INT TERM
 
 echo "=================================================================="
 echo "🚀 SGLang Qwen3.8-27B 服務正在啟動"
@@ -93,9 +163,12 @@ echo "🔹 服務端點     : http://${NODE_HOSTNAME}:${PORT} (內網 IP: http:/
 echo "🔹 開始時間     : $(date)"
 echo "=================================================================="
 
-# 輸出節點資訊至檔案，方便 Gateway / LiteLLM 讀取
+# 1. 初始發布狀態為 starting
+publish_endpoint "starting"
+
+# 2. 輸出節點資訊至檔案 (保留向後相容性)
 cat > "$WORK_DIR/endpoint.info" <<EOF
-JOB_ID=${SLURM_JOB_ID}
+JOB_ID=${SLURM_JOB_ID:-N/A}
 NODE=${NODE_HOSTNAME}
 IP=${NODE_IP}
 PORT=${PORT}
@@ -104,6 +177,22 @@ ENDPOINT_IP=http://${NODE_IP}:${PORT}
 API_KEY_PROTECTED=$([ -n "${SGLANG_API_KEY:-}" ] && echo "true" || echo "false")
 START_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
+
+# 3. 背景非同步自檢健康檢查：SGLang 啟動就緒後，將狀態轉移為 ready
+(
+    for i in $(seq 1 180); do
+        sleep 2
+        AUTH_HEADER=()
+        if [ -n "${SGLANG_API_KEY:-}" ]; then
+            AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
+        fi
+        if curl -s -m 3 "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null | grep -q '"object":'; then
+            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢通過 (Port $PORT)，端點發布狀態正式為 ready"
+            publish_endpoint "ready"
+            break
+        fi
+    done
+) &
 
 # 4. 透過 Singularity 啟動 SGLang Serve
 CMD=(

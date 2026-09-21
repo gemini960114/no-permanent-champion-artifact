@@ -67,6 +67,9 @@ core.[0-9]*
 # ------------------------------------------------------------------------------
 endpoint.info
 **/endpoint.info
+runtime/
+**/runtime/
+config.runtime.yaml
 *.pid
 **/*.pid
 .litellm.pid

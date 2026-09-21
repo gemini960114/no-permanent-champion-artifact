@@ -42,8 +42,18 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-# 4. 自動偵測 SGLang 動態節點端點 (若存在 endpoint.info)
-if [ -f "$DIR/sglang-qwen/endpoint.info" ]; then
+# 4. 動態合成最新 Runtime 設定檔 (掃描所有活躍實例端點並支援負載平衡)
+CONFIG_TO_USE="$DIR/config.yaml"
+if [ -f "$DIR/scripts/generate_runtime_config.py" ]; then
+    echo "🔹 執行端點探測與 Runtime 設定生成..."
+    python3 "$DIR/scripts/generate_runtime_config.py" || true
+    if [ -f "$DIR/config.runtime.yaml" ]; then
+        CONFIG_TO_USE="$DIR/config.runtime.yaml"
+    fi
+fi
+
+# 5. 向後相容回退：若未使用 runtime config，嘗試載入舊版 SGLANG_API_BASE
+if [ "$CONFIG_TO_USE" = "$DIR/config.yaml" ] && [ -f "$DIR/sglang-qwen/endpoint.info" ]; then
     DETECTED_ENDPOINT=$(grep "^ENDPOINT=" "$DIR/sglang-qwen/endpoint.info" | cut -d'=' -f2 | tr -d '\r\n')
     if [ -n "$DETECTED_ENDPOINT" ]; then
         export SGLANG_API_BASE="${DETECTED_ENDPOINT}/v1"
@@ -62,11 +72,11 @@ fi
 
 echo "=========================================================="
 echo " 🚀 正在啟動 LiteLLM Proxy (${HOST}:${PORT})"
-echo " 🔹 設定檔   : ${DIR}/config.yaml"
+echo " 🔹 設定檔   : ${CONFIG_TO_USE}"
 echo " 🔹 PID 檔案 : ${PID_FILE}"
 echo "=========================================================="
 
 # 記錄目前 PID (exec 保留原 PID)
 echo "$$" > "$PID_FILE"
 
-exec litellm --config "$DIR/config.yaml" --host "$HOST" --port "$PORT"
+exec litellm --config "$CONFIG_TO_USE" --host "$HOST" --port "$PORT"

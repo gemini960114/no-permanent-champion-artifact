@@ -1,9 +1,9 @@
 # Plan Update：每日模型啟停與 LiteLLM 設定更新
 
 > [!NOTE]
-> **文件狀態：規劃中，尚未實作。**  
+> **文件狀態：Phase 1 核心機制已落地實作並完成實體驗收。**  
 > 更新日期：2026-09-22  
-> 本文件記錄目前的架構決策、預定流程與驗收條件；實際排程時間仍應依 Slurm 等候時間及模型載入實測結果調整。
+> **成果簡述**：已完成「同節點自動防碰撞探測 (`find_available_port`)」、「端點登錄庫 (`runtime/endpoints/`)」、「Morning Controller 設定合成器 (`scripts/generate_runtime_config.py`)」與「LiteLLM 多實例負載平衡實測 (Job 418199, 418354, 418369 同時在線)」。相關維運與部署操作請參閱 [README.md](../README.md)。
 
 ## 1. 背景與目標
 

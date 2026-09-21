@@ -10,10 +10,11 @@
 | :--- | :--- | :--- |
 | [`config.env`](file:///path/to/work/github/litellm-proxy/sglang-qwen/config.env) | 配置設定 | 集中管理所有 SLURM 資源配額、容器路徑、模型名稱與 SGLang 核心推論參數 |
 | [`download_model.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/download_model.sh) | 下載工具 | 透過 `uvx --from huggingface_hub` 高速下載 HuggingFace 模型權重至 `/path/to/work/models` |
-| [`submit_slurm.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/submit_slurm.sh) | 派送腳本 | 支援 `--dry-run` 與自訂參數，安全設定 `--chdir` 派送作業至 SLURM |
-| [`sglang_server.slurm`](file:///path/to/work/github/litellm-proxy/sglang-qwen/sglang_server.slurm) | SLURM 核心 | 申請 1 顆 H200 GPU、綁定系統 Singularity 容器執行 `sglang serve` 的批次腳本 |
+| [`submit_slurm.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/submit_slurm.sh) | 派送腳本 | 支援 `-w <Node>` 指定節點、`--dry-run` 與自訂參數，安全派送作業至 SLURM |
+| [`sglang_server.slurm`](file:///path/to/work/github/litellm-proxy/sglang-qwen/sglang_server.slurm) | SLURM 核心 | 申請 1 顆 H200 GPU、內建「同節點 Port 自動避讓 (30000->30001)」與原子發布 endpoint 狀態 |
 | [`check_service.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/check_service.sh) | 檢查工具 | 即時查詢 SLURM 佇列、檢查 `endpoint.info`、測試 `/v1/models` 並檢視最新日誌 |
-| `endpoint.info` | 動態輸出 | 服務啟動時自動記錄目前分配到的計算節點 Hostname、內網 IP 與 Port |
+| `endpoint.info` | 動態輸出 | 服務啟動時自動記錄目前分配到的計算節點 Hostname、內網 IP 與 Port (向後相容) |
+| `../runtime/endpoints/` | 狀態註冊庫 | 存放各實例專屬的 `.env` 狀態檔，供 LiteLLM 自動合成多實例負載平衡設定 |
 | `logs/` | 日誌目錄 | 存放 SLURM 標準輸出 (`.out`) 與 SGLang 運行日誌 (`.err`) |
 
 ---
@@ -62,9 +63,14 @@ cd /path/to/work/github/litellm-proxy/sglang-qwen
 ./submit_slurm.sh
 ```
 
-若欲指定其他分割區或帳號：
+**進階調度與多實例啟動：**
 ```bash
-./submit_slurm.sh -p dev -a your-slurm-account
+# 指定特定節點 (例如 node-L)
+./submit_slurm.sh -w node-L
+
+# 若同時間派送第 2 個、第 3 個實例至同一節點：
+# 腳本會自動探測實體 Socket 與 Registry 狀態，若 30000 被佔用則自動選 30001、30002，無縫共存！
+./submit_slurm.sh -w node-L
 ```
 
 ---

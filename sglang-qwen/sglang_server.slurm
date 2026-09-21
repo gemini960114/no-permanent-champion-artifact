@@ -81,13 +81,25 @@ NODE_HOSTNAME="$(hostname)"
 NODE_IP="$(hostname -I | awk '{print $1}')"
 
 # ------------------------------------------------------------------------------
+# 端點登錄檔 (Endpoint Registry) 與生命週期清理
+# ------------------------------------------------------------------------------
+PROJECT_ROOT="$(cd "$WORK_DIR/.." && pwd)"
+REGISTRY_DIR="$PROJECT_ROOT/runtime/endpoints"
+mkdir -p -m 700 "$REGISTRY_DIR" 2>/dev/null || true
+chmod 700 "$REGISTRY_DIR" 2>/dev/null || true
+
+ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env"
+
+# ------------------------------------------------------------------------------
 # 動態可用 Port 偵測 (防同節點多實例/多模型 Port 碰撞)
+# 雙重防護：1. 實體 Socket 佔用檢測  2. Registry 檔案預訂檢測 (防模型載入期間的競爭條件)
 # ------------------------------------------------------------------------------
 find_available_port() {
     local candidate="${1:-30000}"
     local max_attempts=100
     local attempt=0
     while [ "$attempt" -lt "$max_attempts" ]; do
+        local socket_free=false
         if python3 -c "
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -98,10 +110,30 @@ try:
 except OSError:
     sys.exit(1)
 " "$candidate" 2>/dev/null; then
+            socket_free=true
+        fi
+
+        local registry_conflict=false
+        if [ -d "$REGISTRY_DIR" ]; then
+            for f in "$REGISTRY_DIR"/*.env; do
+                [ -e "$f" ] || continue
+                if [ "$f" = "$ENDPOINT_REGISTRY_FILE" ]; then
+                    continue
+                fi
+                if grep -q "^NODE_HOSTNAME=${NODE_HOSTNAME}$" "$f" 2>/dev/null && \
+                   grep -q "^PORT=${candidate}$" "$f" 2>/dev/null; then
+                    registry_conflict=true
+                    break
+                fi
+            done
+        fi
+
+        if [ "$socket_free" = true ] && [ "$registry_conflict" = false ]; then
             echo "$candidate"
             return 0
         fi
-        echo "⚠️ Port $candidate 已被同節點其他程序佔用，自動嘗試下一個 Port $((candidate + 1))..." >&2
+
+        echo "⚠️ Port $candidate 已被同節點其他程序或排程佔用 (socket_free=$socket_free, registry_conflict=$registry_conflict)，嘗試下一個 Port $((candidate + 1))..." >&2
         ((candidate++))
         ((attempt++))
     done
@@ -112,16 +144,6 @@ except OSError:
 BASE_PORT="${PORT:-30000}"
 ACTUAL_PORT=$(find_available_port "$BASE_PORT")
 PORT="$ACTUAL_PORT"
-
-# ------------------------------------------------------------------------------
-# 端點登錄檔 (Endpoint Registry) 與生命週期清理
-# ------------------------------------------------------------------------------
-PROJECT_ROOT="$(cd "$WORK_DIR/.." && pwd)"
-REGISTRY_DIR="$PROJECT_ROOT/runtime/endpoints"
-mkdir -p -m 700 "$REGISTRY_DIR" 2>/dev/null || true
-chmod 700 "$REGISTRY_DIR" 2>/dev/null || true
-
-ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env"
 
 publish_endpoint() {
     local state="${1:-ready}"

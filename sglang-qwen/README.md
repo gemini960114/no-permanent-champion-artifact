@@ -132,7 +132,7 @@ cd /path/to/work/github/litellm-proxy
 ```powershell
 $res = Invoke-RestMethod -Uri "http://127.0.0.1:4000/v1/chat/completions" `
   -Method Post `
-  -Headers @{Authorization="Bearer <YOUR_LITELLM_MASTER_KEY>"} `
+  -Headers @{Authorization="Bearer <YOUR_USER_API_KEY>"} `
   -ContentType "application/json; charset=utf-8" `
   -Body '{"model": "Qwen3.8-27B", "messages": [{"role": "user", "content": "你好，請自我介紹！"}], "max_tokens": 150}'
 
@@ -147,13 +147,14 @@ $res.choices[0].message.reasoning_content
 ```bash
 curl -X POST "http://127.0.0.1:4000/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <YOUR_LITELLM_MASTER_KEY>" \
+  -H "Authorization: Bearer <YOUR_USER_API_KEY>" \
   -d '{
     "model": "Qwen3.8-27B",
     "messages": [{"role": "user", "content": "你好，請自我介紹！"}],
     "max_tokens": 150
   }'
 ```
+
 
 ---
 

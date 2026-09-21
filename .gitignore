@@ -1,0 +1,25 @@
+# Python 虛擬環境與編譯快取
+.venv/
+__pycache__/
+*.py[cod]
+
+# 機密金鑰與環境變數檔 (重要：絕不上傳)
+.env
+api_keys.json
+sglang-qwen/config.env
+
+# 運行日誌與動態狀態檔
+*.log
+sglang-qwen/*.log
+logs/
+sglang-qwen/logs/
+sglang-qwen/endpoint.info
+endpoint.info
+
+# 系統與編輯器暫存及進程鎖
+.DS_Store
+*.swp
+*.swo
+*.pid
+.litellm.pid
+

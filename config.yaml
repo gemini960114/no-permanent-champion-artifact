@@ -1,0 +1,77 @@
+model_list:
+  # ==========================================
+  # NCHC GenAI Portal Models (外部 API 模型)
+  # ==========================================
+  - model_name: GLM-5.2
+    litellm_params:
+      model: openai/GLM-5.2
+      api_base: https://portal.genai.nchc.org.tw/api/v1
+      api_key: os.environ/NCHC_GENAI_API_KEY
+
+  - model_name: Kimi-K3
+    litellm_params:
+      model: openai/Kimi-K3
+      api_base: https://portal.genai.nchc.org.tw/api/v1
+      api_key: os.environ/NCHC_GENAI_API_KEY
+
+  - model_name: gemma-4-31B-it
+    litellm_params:
+      model: openai/gemma-4-31B-it
+      api_base: https://portal.genai.nchc.org.tw/api/v1
+      api_key: os.environ/NCHC_GENAI_API_KEY
+
+  # ==========================================
+  # HPC 內部 SGLang 服務 (Qwen3.8-27B on H200)
+  # 端點由 start.sh 自動讀取 sglang-qwen/endpoint.info 注入
+  # ==========================================
+  - model_name: Qwen3.8-27B
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-27B
+      api_base: os.environ/SGLANG_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  - model_name: qwen3.8
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-27B
+      api_base: os.environ/SGLANG_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  # ==========================================
+  # HPC 內部 GPU 叢集 (vLLM Deployments)
+  # 說明：目前 gpu-node-1~4 服務離線中，暫時註解避免 /v1/models 導流失敗
+  # 待後端 vLLM 啟動後取消註解即可啟用負載平衡
+  # ==========================================
+  # - model_name: nchc-llm
+  #   litellm_params:
+  #     model: openai/nchc-vllm
+  #     api_base: http://gpu-node-1:8000/v1
+  #     api_key: dummy
+  #
+  # - model_name: nchc-llm
+  #   litellm_params:
+  #     model: openai/nchc-vllm
+  #     api_base: http://gpu-node-2:8000/v1
+  #     api_key: dummy
+  #
+  # - model_name: nchc-llm
+  #   litellm_params:
+  #     model: openai/nchc-vllm
+  #     api_base: http://gpu-node-3:8000/v1
+  #     api_key: dummy
+  #
+  # - model_name: nchc-llm
+  #   litellm_params:
+  #     model: openai/nchc-vllm
+  #     api_base: http://gpu-node-4:8000/v1
+  #     api_key: dummy
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  custom_auth: custom_auth.user_api_key_auth
+  custom_auth_run_common_checks: true
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 2
+  retry_after: 1
+  timeout: 600

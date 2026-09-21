@@ -1,0 +1,6 @@
+# LiteLLM Proxy 核心與相依套件 (鎖定測試通過之穩定版本)
+litellm[proxy]==1.102.0
+uvicorn>=0.30.0
+fastapi>=0.115.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0

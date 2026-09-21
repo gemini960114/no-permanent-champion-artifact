@@ -42,22 +42,17 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-# 4. 動態合成最新 Runtime 設定檔 (掃描所有活躍實例端點並支援負載平衡)
+# 4. 動態合成最新 Runtime 設定檔 (嚴格 Fail-Closed，禁止沿用失敗之舊設定)
 CONFIG_TO_USE="$DIR/config.yaml"
 if [ -f "$DIR/scripts/generate_runtime_config.py" ]; then
     echo "🔹 執行端點探測與 Runtime 設定生成..."
-    python3 "$DIR/scripts/generate_runtime_config.py" || true
-    if [ -f "$DIR/config.runtime.yaml" ]; then
-        CONFIG_TO_USE="$DIR/config.runtime.yaml"
-    fi
-fi
-
-# 5. 向後相容回退：若未使用 runtime config，嘗試載入舊版 SGLANG_API_BASE
-if [ "$CONFIG_TO_USE" = "$DIR/config.yaml" ] && [ -f "$DIR/sglang-qwen/endpoint.info" ]; then
-    DETECTED_ENDPOINT=$(grep "^ENDPOINT=" "$DIR/sglang-qwen/endpoint.info" | cut -d'=' -f2 | tr -d '\r\n')
-    if [ -n "$DETECTED_ENDPOINT" ]; then
-        export SGLANG_API_BASE="${DETECTED_ENDPOINT}/v1"
-        echo "🔹 動態載入 SGLang 端點 : $SGLANG_API_BASE"
+    if python3 "$DIR/scripts/generate_runtime_config.py"; then
+        if [ -f "$DIR/config.runtime.yaml" ]; then
+            CONFIG_TO_USE="$DIR/config.runtime.yaml"
+        fi
+    else
+        echo "❌ 錯誤：Runtime 設定檔生成失敗，終止啟動以策安全！" >&2
+        exit 1
     fi
 fi
 

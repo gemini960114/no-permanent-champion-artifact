@@ -81,26 +81,31 @@ NODE_HOSTNAME="$(hostname)"
 NODE_IP="$(hostname -I | awk '{print $1}')"
 
 # ------------------------------------------------------------------------------
-# 端點登錄檔 (Endpoint Registry) 與生命週期清理
+# 端點登錄檔 (Endpoint Registry) 與 Port 原子鎖目錄
 # ------------------------------------------------------------------------------
 PROJECT_ROOT="$(cd "$WORK_DIR/.." && pwd)"
 REGISTRY_DIR="$PROJECT_ROOT/runtime/endpoints"
-mkdir -p -m 700 "$REGISTRY_DIR" 2>/dev/null || true
-chmod 700 "$REGISTRY_DIR" 2>/dev/null || true
+PORT_LOCKS_DIR="$PROJECT_ROOT/runtime/port-locks"
+mkdir -p -m 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR" 2>/dev/null || true
+chmod 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR" 2>/dev/null || true
 
 ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env"
+CURRENT_PORT_LOCK=""
 
 # ------------------------------------------------------------------------------
-# 動態可用 Port 偵測 (防同節點多實例/多模型 Port 碰撞)
-# 雙重防護：1. 實體 Socket 佔用檢測  2. Registry 檔案預訂檢測 (防模型載入期間的競爭條件)
+# 動態可用 Port 偵測：以 POSIX 原生原子操作 (mkdir) 徹底消除 Race Condition
 # ------------------------------------------------------------------------------
 find_available_port() {
     local candidate="${1:-30000}"
     local max_attempts=100
     local attempt=0
     while [ "$attempt" -lt "$max_attempts" ]; do
-        local socket_free=false
-        if python3 -c "
+        local lock_dir="$PORT_LOCKS_DIR/${NODE_HOSTNAME}-${candidate}"
+
+        # 1. 嘗試原子搶佔 Port 鎖目錄 (mkdir 為系統呼叫層級的原子操作)
+        if mkdir -m 700 "$lock_dir" 2>/dev/null; then
+            # 搶鎖成功！進一步檢驗實體 Socket 是否確無被其他孤兒程序佔用
+            if python3 -c "
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
@@ -110,30 +115,19 @@ try:
 except OSError:
     sys.exit(1)
 " "$candidate" 2>/dev/null; then
-            socket_free=true
+                # 實體 Socket 與原子鎖均確認就緒，記錄擁有者資訊
+                echo "${SLURM_JOB_ID:-manual}" > "$lock_dir/job_id"
+                date -u +"%Y-%m-%dT%H:%M:%SZ" > "$lock_dir/created_at"
+                CURRENT_PORT_LOCK="$lock_dir"
+                echo "$candidate"
+                return 0
+            else
+                # 實體被佔用，撤銷此鎖
+                rm -rf "$lock_dir" 2>/dev/null || true
+            fi
         fi
 
-        local registry_conflict=false
-        if [ -d "$REGISTRY_DIR" ]; then
-            for f in "$REGISTRY_DIR"/*.env; do
-                [ -e "$f" ] || continue
-                if [ "$f" = "$ENDPOINT_REGISTRY_FILE" ]; then
-                    continue
-                fi
-                if grep -q "^NODE_HOSTNAME=${NODE_HOSTNAME}$" "$f" 2>/dev/null && \
-                   grep -q "^PORT=${candidate}$" "$f" 2>/dev/null; then
-                    registry_conflict=true
-                    break
-                fi
-            done
-        fi
-
-        if [ "$socket_free" = true ] && [ "$registry_conflict" = false ]; then
-            echo "$candidate"
-            return 0
-        fi
-
-        echo "⚠️ Port $candidate 已被同節點其他程序或排程佔用 (socket_free=$socket_free, registry_conflict=$registry_conflict)，嘗試下一個 Port $((candidate + 1))..." >&2
+        echo "⚠️ Port $candidate 在節點 $NODE_HOSTNAME 上已被預約或佔用，嘗試下一個 Port $((candidate + 1))..." >&2
         ((candidate++))
         ((attempt++))
     done
@@ -167,11 +161,18 @@ EOF
 
 cleanup_endpoint() {
     echo "🛑 SGLang 服務正在停止 (Job: ${SLURM_JOB_ID:-N/A})..."
+    if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+        kill -TERM "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    fi
     if [ -f "$ENDPOINT_REGISTRY_FILE" ]; then
         rm -f "$ENDPOINT_REGISTRY_FILE" 2>/dev/null || true
     fi
+    if [ -n "${CURRENT_PORT_LOCK:-}" ] && [ -d "$CURRENT_PORT_LOCK" ]; then
+        rm -rf "$CURRENT_PORT_LOCK" 2>/dev/null || true
+    fi
 }
-trap cleanup_endpoint EXIT INT TERM
+trap cleanup_endpoint TERM INT EXIT
 
 echo "=================================================================="
 echo "🚀 SGLang Qwen3.8-27B 服務正在啟動"
@@ -185,7 +186,7 @@ echo "🔹 服務端點     : http://${NODE_HOSTNAME}:${PORT} (內網 IP: http:/
 echo "🔹 開始時間     : $(date)"
 echo "=================================================================="
 
-# 1. 初始發布狀態為 starting
+# 1. 初始發布狀態為 starting (此狀態下合成器嚴格忽略，不上線)
 publish_endpoint "starting"
 
 # 2. 輸出節點資訊至檔案 (保留向後相容性)
@@ -200,20 +201,22 @@ API_KEY_PROTECTED=$([ -n "${SGLANG_API_KEY:-}" ] && echo "true" || echo "false")
 START_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
 EOF
 
-# 3. 背景非同步自檢健康檢查：SGLang 啟動就緒後，將狀態轉移為 ready
+# 3. 背景非同步自檢健康檢查：嚴格要求 HTTP 200 與合法 JSON 回應才標記 ready
 (
+    AUTH_HEADER=()
+    if [ -n "${SGLANG_API_KEY:-}" ]; then
+        AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
+    fi
     for i in $(seq 1 180); do
         sleep 2
-        AUTH_HEADER=()
-        if [ -n "${SGLANG_API_KEY:-}" ]; then
-            AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
-        fi
-        if curl -s -m 3 "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null | grep -q '"object":'; then
-            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢通過 (Port $PORT)，端點發布狀態正式為 ready"
+        HTTP_CODE=$(curl -s -m 4 -w "%{http_code}" -o /dev/null "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || echo "000")
+        if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢通過 (Port $PORT 回應 HTTP 200)，發布狀態正式為 ready"
             publish_endpoint "ready"
-            break
+            exit 0
         fi
     done
+    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢逾時未就緒 (Port $PORT)" >&2
 ) &
 
 # 4. 透過 Singularity 啟動 SGLang Serve
@@ -246,6 +249,9 @@ if [ -n "${SGLANG_API_KEY:-}" ]; then
   CMD+=(--api-key "$SGLANG_API_KEY")
 fi
 
-"${CMD[@]}"
+# 置於背景並由 Bash 監聽信號以確保 trap 於 scancel 時能可靠執行
+"${CMD[@]}" &
+SERVER_PID=$!
+wait "$SERVER_PID"
 
 

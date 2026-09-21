@@ -96,7 +96,9 @@ fi
 echo "=========================================================="
 echo " 🎉 安裝已全部完成！"
 echo " [Gateway 網關管理]"
-echo " • 啟動網關: ./start.sh 或 nohup ./start.sh > litellm.log 2>&1 &"
+echo " • 啟動網關: ./start.sh 或 (umask 077; nohup ./start.sh > litellm.log 2>&1 &)"
+
+
 echo " • 測試服務: ./test.sh"
 echo " • 管理金鑰: ./key_tool.py generate --name 'User' --models all"
 echo " • 停止服務: ./stop.sh"

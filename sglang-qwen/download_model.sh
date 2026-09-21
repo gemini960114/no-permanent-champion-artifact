@@ -3,14 +3,17 @@
 # Qwen 模型下載腳本 (download_model.sh)
 # 支援下載 Qwen/Qwen3.8-27B 或 Qwen/Qwen3.8-27B-FP8
 # ==============================================================================
+umask 077
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 載入 config.env
 if [ -f "$SCRIPT_DIR/config.env" ]; then
+    chmod 600 "$SCRIPT_DIR/config.env" 2>/dev/null || true
     source "$SCRIPT_DIR/config.env"
 fi
+
 
 MODELS_ROOT="${MODELS_DIR:-/path/to/work/models}"
 TOKEN="${HF_TOKEN:-}"

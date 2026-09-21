@@ -7,7 +7,13 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 cd "$DIR"
 
+# 確保日誌檔具備 600 權限 (防範呼叫端外部重導向未帶 umask 077)
+if [ -f "$DIR/litellm.log" ]; then
+    chmod 600 "$DIR/litellm.log" 2>/dev/null || true
+fi
+
 PID_FILE="$DIR/.litellm.pid"
+
 
 # 1. 載入虛擬環境
 if [ -d "$DIR/.venv" ]; then

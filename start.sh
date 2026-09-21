@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
+umask 077
 set -e
 
+
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
 cd "$DIR"
 
 PID_FILE="$DIR/.litellm.pid"

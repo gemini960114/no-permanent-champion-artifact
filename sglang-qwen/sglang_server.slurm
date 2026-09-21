@@ -13,6 +13,7 @@
 #SBATCH --output=logs/sglang-%x-%j.out
 #SBATCH --error=logs/sglang-%x-%j.err
 
+umask 077
 set -eo pipefail
 
 # 1. 確保工作目錄 (SLURM 計算節點上 BASH_SOURCE 會指向 /var/spool/slurmd，故優先採用 SLURM_SUBMIT_DIR)
@@ -21,12 +22,15 @@ if [[ "$WORK_DIR" == *"/var/spool/slurmd"* ]] || [ ! -w "$WORK_DIR" ]; then
     WORK_DIR="/path/to/work/github/litellm-proxy/sglang-qwen"
 fi
 cd "$WORK_DIR"
-mkdir -p logs
+mkdir -p -m 700 logs
+chmod 700 logs 2>/dev/null || true
 
 # 載入設定檔
 if [ -f "$WORK_DIR/config.env" ]; then
+    chmod 600 "$WORK_DIR/config.env" 2>/dev/null || true
     source "$WORK_DIR/config.env"
 fi
+
 
 # 2. 載入 Singularity 環境 (優先使用宿主機 /usr/bin/singularity 或 apptainer，具備完整的 NVIDIA Driver 580 / CUDA 13 掛載支援)
 SINGULARITY_BIN=""

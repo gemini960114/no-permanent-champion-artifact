@@ -2,15 +2,19 @@
 # ==============================================================================
 # SGLang SLURM 任務派送腳本 (submit_slurm.sh)
 # ==============================================================================
+umask 077
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+mkdir -p -m 700 "$SCRIPT_DIR/logs"
+chmod 700 "$SCRIPT_DIR/logs" 2>/dev/null || true
 
 if [ -f "$SCRIPT_DIR/config.env" ]; then
     chmod 600 "$SCRIPT_DIR/config.env" 2>/dev/null || true
     source "$SCRIPT_DIR/config.env"
 fi
+
 
 
 PARTITION="${SLURM_PARTITION:-8gpus}"

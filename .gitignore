@@ -1,25 +1,76 @@
-# Python 虛擬環境與編譯快取
-.venv/
-__pycache__/
-*.py[cod]
+# ==============================================================================
+# LiteLLM HPC Proxy & SGLang 服務 - Git 忽略規則檔 (.gitignore)
+# ==============================================================================
 
-# 機密金鑰與環境變數檔 (重要：絕不上傳)
+# 1. 機密憑證與環境變數檔 (重要：絕不上傳任何真實密鑰)
 .env
+.env.*
+!.env.example
+config.env
+**/config.env
+!config.env.example
+!**/config.env.example
 api_keys.json
-sglang-qwen/config.env
+**/api_keys.json
 
-# 運行日誌與動態狀態檔
+# SSL / TLS 私鑰與憑證檔 (供 Caddy/Nginx Gateway 使用)
+*.key
+*.pem
+*.crt
+*.cert
+*.p12
+*.pfx
+
+# 2. 運行日誌與 SLURM 排程輸出檔 (嚴格排除包含內部 IP 與除錯紀錄之日誌)
 *.log
-sglang-qwen/*.log
+**/*.log
+*.out
+**/*.out
+*.err
+**/*.err
 logs/
-sglang-qwen/logs/
-sglang-qwen/endpoint.info
-endpoint.info
+**/logs/
 
-# 系統與編輯器暫存及進程鎖
-.DS_Store
-*.swp
-*.swo
+# 3. 動態節點狀態、排程端點與進程鎖
+endpoint.info
+**/endpoint.info
 *.pid
+**/*.pid
 .litellm.pid
 
+# 4. 大型模型權重、快取與容器映像檔 (防止大檔案誤入 Git)
+models/
+**/models/
+huggingface_cache/
+sglang_storage/
+.cache/
+*.sif
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# 5. Python 虛擬環境與編譯快取
+.venv/
+venv/
+env/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# 6. 作業系統、編輯器暫存與備份檔
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.orig
+.vscode/
+.idea/

@@ -91,6 +91,8 @@ chmod 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR" 2>/dev/null || true
 
 ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env"
 CURRENT_PORT_LOCK=""
+HEALTH_PID=""
+SERVER_PID=""
 
 # ------------------------------------------------------------------------------
 # 動態可用 Port 偵測：以 POSIX 原生原子操作 (mkdir) 徹底消除 Race Condition
@@ -108,6 +110,7 @@ find_available_port() {
             if python3 -c "
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
     s.bind(('0.0.0.0', int(sys.argv[1])))
     s.close()
@@ -118,8 +121,8 @@ except OSError:
                 # 實體 Socket 與原子鎖均確認就緒，記錄擁有者資訊
                 echo "${SLURM_JOB_ID:-manual}" > "$lock_dir/job_id"
                 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$lock_dir/created_at"
+                PORT="$candidate"
                 CURRENT_PORT_LOCK="$lock_dir"
-                echo "$candidate"
                 return 0
             else
                 # 實體被佔用，撤銷此鎖
@@ -128,16 +131,20 @@ except OSError:
         fi
 
         echo "⚠️ Port $candidate 在節點 $NODE_HOSTNAME 上已被預約或佔用，嘗試下一個 Port $((candidate + 1))..." >&2
-        ((candidate++))
-        ((attempt++))
+        candidate=$((candidate + 1))
+        attempt=$((attempt + 1))
     done
     echo "❌ 錯誤：找不到可用 Port (嘗試至 $candidate)" >&2
     return 1
 }
 
 BASE_PORT="${PORT:-30000}"
-ACTUAL_PORT=$(find_available_port "$BASE_PORT")
-PORT="$ACTUAL_PORT"
+PORT=""
+find_available_port "$BASE_PORT"
+if [ -z "${PORT:-}" ] || [ -z "${CURRENT_PORT_LOCK:-}" ]; then
+    echo "❌ 錯誤：無法成功鎖定可用 Port！" >&2
+    exit 1
+fi
 
 publish_endpoint() {
     local state="${1:-ready}"
@@ -161,6 +168,10 @@ EOF
 
 cleanup_endpoint() {
     echo "🛑 SGLang 服務正在停止 (Job: ${SLURM_JOB_ID:-N/A})..."
+    if [ -n "${HEALTH_PID:-}" ] && kill -0 "$HEALTH_PID" 2>/dev/null; then
+        kill -TERM "$HEALTH_PID" 2>/dev/null || true
+        wait "$HEALTH_PID" 2>/dev/null || true
+    fi
     if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
         kill -TERM "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
@@ -169,7 +180,15 @@ cleanup_endpoint() {
         rm -f "$ENDPOINT_REGISTRY_FILE" 2>/dev/null || true
     fi
     if [ -n "${CURRENT_PORT_LOCK:-}" ] && [ -d "$CURRENT_PORT_LOCK" ]; then
-        rm -rf "$CURRENT_PORT_LOCK" 2>/dev/null || true
+        local lock_owner=""
+        if [ -f "$CURRENT_PORT_LOCK/job_id" ]; then
+            lock_owner=$(cat "$CURRENT_PORT_LOCK/job_id" 2>/dev/null || true)
+        fi
+        if [ "$lock_owner" = "${SLURM_JOB_ID:-manual}" ]; then
+            rm -rf -- "$CURRENT_PORT_LOCK" 2>/dev/null || true
+        else
+            echo "⚠️ Port 鎖 $CURRENT_PORT_LOCK 擁有者已變更 ($lock_owner != ${SLURM_JOB_ID:-manual})，略過刪除以防誤刪" >&2
+        fi
     fi
 }
 trap cleanup_endpoint TERM INT EXIT
@@ -183,41 +202,38 @@ echo "🔹 GPU 資源     : 1x H200 GPU (${SLURM_JOB_GPUS:-0})"
 echo "🔹 模型路徑     : $RESOLVED_MODEL_PATH"
 echo "🔹 容器映像檔   : $SIF_FILE"
 echo "🔹 服務端點     : http://${NODE_HOSTNAME}:${PORT} (內網 IP: http://${NODE_IP}:${PORT})"
+echo "🔹 Port Lock    : $CURRENT_PORT_LOCK"
 echo "🔹 開始時間     : $(date)"
 echo "=================================================================="
 
 # 1. 初始發布狀態為 starting (此狀態下合成器嚴格忽略，不上線)
 publish_endpoint "starting"
 
-# 2. 輸出節點資訊至檔案 (保留向後相容性)
-cat > "$WORK_DIR/endpoint.info" <<EOF
-JOB_ID=${SLURM_JOB_ID:-N/A}
-NODE=${NODE_HOSTNAME}
-IP=${NODE_IP}
-PORT=${PORT}
-ENDPOINT=http://${NODE_HOSTNAME}:${PORT}
-ENDPOINT_IP=http://${NODE_IP}:${PORT}
-API_KEY_PROTECTED=$([ -n "${SGLANG_API_KEY:-}" ] && echo "true" || echo "false")
-START_TIME="$(date '+%Y-%m-%d %H:%M:%S')"
-EOF
-
-# 3. 背景非同步自檢健康檢查：嚴格要求 HTTP 200 與合法 JSON 回應才標記 ready
+# 2. 背景非同步自檢健康檢查：嚴格要求 HTTP 200 與合法 JSON 回應才標記 ready
 (
     AUTH_HEADER=()
     if [ -n "${SGLANG_API_KEY:-}" ]; then
         AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
     fi
-    for i in $(seq 1 180); do
+    for i in $(seq 1 300); do
         sleep 2
-        HTTP_CODE=$(curl -s -m 4 -w "%{http_code}" -o /dev/null "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || echo "000")
-        if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢通過 (Port $PORT 回應 HTTP 200)，發布狀態正式為 ready"
+        RESP=$(curl -s -m 4 "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || true)
+        if [ -n "$RESP" ] && python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    sys.exit(0 if isinstance(data, dict) and ('data' in data or 'object' in data) else 1)
+except Exception:
+    sys.exit(1)
+" <<< "$RESP" 2>/dev/null; then
+            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢通過 (Port $PORT 回應 HTTP 200 且 JSON 合法)，發布狀態正式為 ready"
             publish_endpoint "ready"
             exit 0
         fi
     done
     echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢逾時未就緒 (Port $PORT)" >&2
 ) &
+HEALTH_PID=$!
 
 # 4. 透過 Singularity 啟動 SGLang Serve
 CMD=(

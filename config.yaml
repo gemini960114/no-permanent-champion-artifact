@@ -22,7 +22,7 @@ model_list:
 
   # ==========================================
   # HPC 內部 SGLang 服務 (Qwen3.8-27B on H200)
-  # 端點由 start.sh 自動讀取 sglang-qwen/endpoint.info 注入
+  # 端點由 start.sh 動態探測並由 generate_runtime_config.py 自動合成
   # ==========================================
   - model_name: Qwen3.8-27B
     litellm_params:

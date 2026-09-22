@@ -54,7 +54,7 @@ LITELLM_MASTER_KEY=${NEW_MASTER_KEY}
 # 國網 GenAI Portal API Key (請填入您的國網 API Key)
 NCHC_GENAI_API_KEY=${NCHC_GENAI_API_KEY:-your_nchc_genai_api_key}
 
-# HPC 內部 SGLang Qwen 端點與鑑權金鑰 (可由 start.sh 自動自 endpoint.info 載入)
+# HPC 內部 SGLang Qwen 端點與鑑權金鑰 (由 start.sh 自動自 runtime/endpoints/ 合成動態配置)
 SGLANG_API_BASE=http://node-H:30000/v1
 SGLANG_API_KEY=${NEW_SGLANG_KEY}
 EOF

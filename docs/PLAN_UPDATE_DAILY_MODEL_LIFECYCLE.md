@@ -1,9 +1,9 @@
 # Plan Update：每日模型啟停與 LiteLLM 設定更新
 
 > [!NOTE]
-> **文件狀態：Phase 1 設定合成器、原子 Port 鎖與雙向清理機制已實作並完成實體驗收。**  
+> **文件狀態：Phase 1 設定合成器、原子 Port 鎖與雙向清理機制已實作並完成實體驗收（經同節點雙 Job 418623/418624 現場實測通過）。**  
 > 更新日期：2026-09-22  
-> **成果簡述**：已完成「POSIX 原生原子目錄鎖 (`mkdir`) 探測 Port」、「端點登錄庫 (`runtime/endpoints/`)」、「Controller 設定合成器 (`scripts/generate_runtime_config.py`)」與「端點生命週期自動對帳清理」。完整排程排空迴圈（flock、定時提交與等待驗收）持續依規劃推進中。相關維運與部署操作請參閱 [README.md](../README.md)。
+> **成果簡述**：已完成「POSIX 原生原子目錄鎖 (`mkdir`) 探測 Port」、「端點登錄庫 (`runtime/endpoints/`)」、「Controller 設定合成器 (`scripts/generate_runtime_config.py`)」、「端點生命週期自動對帳清理」與「同機多實例連接埠避讓與清理現場實測」。完整排程排空迴圈（flock、定時提交與等待驗收）持續依規劃推進中。相關維運與部署操作請參閱 [README.md](../README.md)。
 
 ## 1. 背景與目標
 

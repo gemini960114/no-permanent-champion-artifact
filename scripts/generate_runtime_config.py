@@ -21,6 +21,7 @@ LiteLLM Runtime 設定動態產生器 (Morning Controller Core) - 工業級加�
 import os
 import sys
 import glob
+import json
 import shutil
 import subprocess
 import urllib.request
@@ -46,32 +47,49 @@ def get_sglang_api_key() -> str:
                     break
     return key
 
-def is_job_running(job_id: str) -> bool:
+def get_job_status(job_id: str) -> str:
     """
-    透過 squeue 檢查 Slurm Job 是否確實處於 RUNNING 狀態。
-    若回傳碼非 0、逾時或狀態為 PENDING / COMPLETING / CANCELLED，均判定為 False (Fail-Closed)。
+    透過 squeue 檢查 Slurm Job 狀態，嚴格回傳三態：
+    - 'RUNNING'  : 作業正常運行中
+    - 'INACTIVE' : 作業已明確終止 (squeue 回報終止狀態或回報 Invalid job id)
+    - 'UNKNOWN'  : squeue 逾時、連線異常或無法與 controller 通訊 (Fail-Closed 保留)
     """
-    if not job_id or job_id in ("N/A", "manual", "dummy"):
-        return False
+    if not job_id or str(job_id) in ("N/A", "dummy"):
+        return "INACTIVE"
+    if str(job_id) == "manual":
+        return "RUNNING"
     try:
         res = subprocess.run(
             ["squeue", "-j", str(job_id), "-h", "-o", "%T"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=4
+            timeout=5
         )
-        if res.returncode != 0:
-            return False
-        state = res.stdout.strip().upper()
-        return state == "RUNNING"
+        if res.returncode == 0:
+            state = res.stdout.strip().upper()
+            if state == "RUNNING":
+                return "RUNNING"
+            elif state in ("COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "PREEMPTED", "NODE_FAIL", "DEAD", "SUSPENDED"):
+                return "INACTIVE"
+            elif state in ("PENDING", "CONFIGURING", "COMPLETING"):
+                return state
+            else:
+                return "UNKNOWN"
+        else:
+            combined_err = (res.stderr + " " + res.stdout).lower()
+            if "invalid job id specified" in combined_err or "slurm_load_jobs error" in combined_err:
+                return "INACTIVE"
+            return "UNKNOWN"
+    except subprocess.TimeoutExpired:
+        return "UNKNOWN"
     except Exception:
-        return False
+        return "UNKNOWN"
 
-def is_endpoint_alive(api_base: str, api_key: str, timeout: float = 2.0) -> bool:
+def is_endpoint_alive(api_base: str, api_key: str, timeout: float = 2.5) -> bool:
     """
     從登入節點主動向 SGLang /v1/models 發送 HTTP GET 請求。
-    必須回傳 HTTP 200 且回應包含合法 JSON 才認定存活。
+    必須回傳 HTTP 200 且回應為合法 JSON (含有 data 或 object 欄位) 才認定存活。
     """
     if not api_base:
         return False
@@ -81,7 +99,10 @@ def is_endpoint_alive(api_base: str, api_key: str, timeout: float = 2.0) -> bool
         if api_key:
             req.add_header("Authorization", f"Bearer {api_key}")
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status == 200
+            if resp.status != 200:
+                return False
+            payload = json.loads(resp.read().decode("utf-8"))
+            return isinstance(payload, dict) and ("data" in payload or "object" in payload)
     except Exception:
         return False
 
@@ -98,10 +119,16 @@ def parse_env_file(filepath: str) -> dict:
                 data[k.strip()] = v.strip().strip('"').strip("'")
     return data
 
-def reconcile_port_locks():
-    """清理已結束 Job 遺留的 port lock 目錄"""
+def reconcile_port_locks() -> bool:
+    """
+    清理已結束 Job 遺留之 port lock 目錄。
+    - INACTIVE: 安全清除鎖目錄
+    - RUNNING / PENDING: 正常保留
+    - UNKNOWN: 異常/逾時，嚴格保留以防衝突，並回報 False
+    """
     if not os.path.isdir(PORT_LOCKS_DIR):
-        return
+        return True
+    clean_ok = True
     for lock_path in glob.glob(os.path.join(PORT_LOCKS_DIR, "*")):
         if not os.path.isdir(lock_path):
             continue
@@ -110,10 +137,20 @@ def reconcile_port_locks():
             try:
                 with open(job_id_file, "r", encoding="utf-8") as f:
                     job_id = f.read().strip()
-                if job_id and not is_job_running(job_id):
+                if not job_id:
+                    continue
+                status = get_job_status(job_id)
+                if status == "INACTIVE":
+                    print(f"🧹 清理失效 Port 鎖：Job {job_id} 已確認終止 ({os.path.basename(lock_path)})")
                     shutil.rmtree(lock_path, ignore_errors=True)
-            except Exception:
-                pass
+                elif status == "UNKNOWN":
+                    print(f"⚠️  Slurm 狀態查詢異常 (Job {job_id} 狀態未知)，嚴格保留 Port 鎖以防衝突 ({os.path.basename(lock_path)})")
+                    clean_ok = False
+                # 若為 RUNNING / PENDING / COMPLETING 則保留
+            except Exception as e:
+                print(f"⚠️  檢查 Port 鎖發生例外 ({lock_path}): {e}")
+                clean_ok = False
+    return clean_ok
 
 def main():
     if not os.path.isfile(TEMPLATE_CONFIG_PATH):
@@ -134,9 +171,11 @@ def main():
 
     sglang_key = get_sglang_api_key()
     discovered_endpoints = []
+    has_unknown = False
 
-    # 1. 執行 Port Locks 對帳
-    reconcile_port_locks()
+    # 1. 執行 Port Locks 對帳 (若遇到 UNKNOWN 狀態則保留並標記)
+    if not reconcile_port_locks():
+        has_unknown = True
 
     # 2. 掃描 runtime/endpoints/*.env
     env_files = sorted(glob.glob(os.path.join(ENDPOINTS_DIR, "*.env")))
@@ -151,23 +190,30 @@ def main():
         node = info.get("NODE_HOSTNAME", "unknown")
         port = info.get("PORT", "unknown")
 
-        # 檢查 1：Slurm Job 是否仍在 RUNNING 狀態
-        if not is_job_running(job_id):
-            print(f"🧹 清理失效端點檔：Job {job_id} 已非運行中 ({os.path.basename(env_path)})")
+        job_status = get_job_status(job_id)
+        if job_status == "INACTIVE":
+            print(f"🧹 清理失效端點檔：Job {job_id} 已確認終止 ({os.path.basename(env_path)})")
             try:
                 os.remove(env_path)
             except OSError:
                 pass
             continue
+        elif job_status == "UNKNOWN":
+            print(f"⚠️  Slurm 狀態查詢異常 (Job {job_id} 狀態未知)，略過此端點且不清理檔案 (Fail-Closed)")
+            has_unknown = True
+            continue
+        elif job_status != "RUNNING":
+            print(f"⏳ 略過非運行中端點：Job {job_id} on {node}:{port} (Slurm 狀態: {job_status})")
+            continue
 
         # 檢查 2：狀態必須嚴格為 ready (若在 starting 則跳過，絕不寫入設定)
         if state != "ready":
-            print(f"⏳ 略過未就緒端點：Job {job_id} on {node}:{port} (目前狀態: {state})")
+            print(f"⏳ 略過未就緒端點：Job {job_id} on {node}:{port} (目前內部狀態: {state})")
             continue
 
-        # 檢查 3：登入節點主動 HTTP 200 探測 (防止假性 ready 或網路斷線)
+        # 檢查 3：登入節點主動 HTTP 200 + 合法 JSON 探測 (防止假性 ready 或網路斷線)
         if not is_endpoint_alive(api_base, sglang_key, timeout=2.5):
-            print(f"⚠️  略過連線失敗端點：Job {job_id} on {node}:{port} (HTTP 200 檢測未通過)")
+            print(f"⚠️  略過連線失敗端點：Job {job_id} on {node}:{port} (HTTP 200/JSON 檢測未通過)")
             continue
 
         discovered_endpoints.append({
@@ -181,7 +227,11 @@ def main():
             "state": state
         })
 
-    # 3. 建構動態模型清單 (嚴格 Fail-Closed，不回退讀取已死亡的 legacy endpoint.info)
+    if has_unknown:
+        print("❌ 錯誤：Slurm 狀態查詢異常 (存在 UNKNOWN 狀態之 Job)，為免誤判終止生成！", file=sys.stderr)
+        sys.exit(1)
+
+    # 3. 建構動態模型清單 (嚴格 Fail-Closed，僅採用通過檢查之活躍端點)
     dynamic_deployments = []
     alias_deployments = []
     for ep in discovered_endpoints:

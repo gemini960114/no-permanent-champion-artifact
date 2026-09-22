@@ -22,6 +22,7 @@ import os
 import sys
 import glob
 import json
+import time
 import shutil
 import subprocess
 import urllib.request
@@ -51,7 +52,7 @@ def get_job_status(job_id: str) -> str:
     """
     透過 squeue 檢查 Slurm Job 狀態，嚴格回傳三態：
     - 'RUNNING'  : 作業正常運行中
-    - 'INACTIVE' : 作業已明確終止 (squeue 回報終止狀態或回報 Invalid job id)
+    - 'INACTIVE' : 作業已明確終止 (squeue 終止狀態碼，或明確回報 Invalid job id specified)
     - 'UNKNOWN'  : squeue 逾時、連線異常或無法與 controller 通訊 (Fail-Closed 保留)
     """
     if not job_id or str(job_id) in ("N/A", "dummy"):
@@ -70,15 +71,15 @@ def get_job_status(job_id: str) -> str:
             state = res.stdout.strip().upper()
             if state == "RUNNING":
                 return "RUNNING"
-            elif state in ("COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "PREEMPTED", "NODE_FAIL", "DEAD", "SUSPENDED"):
+            elif state in ("COMPLETED", "FAILED", "CANCELLED", "TIMEOUT", "PREEMPTED", "NODE_FAIL", "DEAD"):
                 return "INACTIVE"
-            elif state in ("PENDING", "CONFIGURING", "COMPLETING"):
+            elif state in ("PENDING", "CONFIGURING", "COMPLETING", "SUSPENDED"):
                 return state
             else:
                 return "UNKNOWN"
         else:
             combined_err = (res.stderr + " " + res.stdout).lower()
-            if "invalid job id specified" in combined_err or "slurm_load_jobs error" in combined_err:
+            if "invalid job id specified" in combined_err:
                 return "INACTIVE"
             return "UNKNOWN"
     except subprocess.TimeoutExpired:
@@ -123,12 +124,14 @@ def reconcile_port_locks() -> bool:
     """
     清理已結束 Job 遺留之 port lock 目錄。
     - INACTIVE: 安全清除鎖目錄
-    - RUNNING / PENDING: 正常保留
+    - RUNNING / PENDING / COMPLETING / SUSPENDED: 正常保留
     - UNKNOWN: 異常/逾時，嚴格保留以防衝突，並回報 False
+    - 無 job_id 之孤兒鎖：若目錄 mtime 超過 600 秒 (10 分鐘) 則安全回收
     """
     if not os.path.isdir(PORT_LOCKS_DIR):
         return True
     clean_ok = True
+    now = time.time()
     for lock_path in glob.glob(os.path.join(PORT_LOCKS_DIR, "*")):
         if not os.path.isdir(lock_path):
             continue
@@ -146,9 +149,21 @@ def reconcile_port_locks() -> bool:
                 elif status == "UNKNOWN":
                     print(f"⚠️  Slurm 狀態查詢異常 (Job {job_id} 狀態未知)，嚴格保留 Port 鎖以防衝突 ({os.path.basename(lock_path)})")
                     clean_ok = False
-                # 若為 RUNNING / PENDING / COMPLETING 則保留
+                # 若為 RUNNING / PENDING / COMPLETING / SUSPENDED 則保留
             except Exception as e:
                 print(f"⚠️  檢查 Port 鎖發生例外 ({lock_path}): {e}")
+                clean_ok = False
+        else:
+            # 處理缺少 job_id 的孤兒鎖目錄
+            try:
+                mtime = os.path.getmtime(lock_path)
+                if now - mtime > 600:
+                    print(f"🧹 清理遺留之無主孤兒 Port 鎖 (逾時 10 分鐘)：{os.path.basename(lock_path)}")
+                    shutil.rmtree(lock_path, ignore_errors=True)
+                else:
+                    print(f"⏳ 鎖目錄 {os.path.basename(lock_path)} 尚無 job_id 且未達 10 分鐘寬限期，暫予保留")
+            except Exception as e:
+                print(f"⚠️  檢查無主 Port 鎖發生例外 ({lock_path}): {e}")
                 clean_ok = False
     return clean_ok
 

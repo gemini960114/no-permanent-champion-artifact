@@ -215,22 +215,26 @@ publish_endpoint "starting"
     if [ -n "${SGLANG_API_KEY:-}" ]; then
         AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
     fi
+    TMP_BODY=$(mktemp)
+    trap 'rm -f "$TMP_BODY"' EXIT
     for i in $(seq 1 300); do
         sleep 2
-        RESP=$(curl -s -m 4 "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || true)
-        if [ -n "$RESP" ] && python3 -c "
+        HTTP_CODE=$(curl -sS -m 4 -o "$TMP_BODY" -w "%{http_code}" "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || echo "000")
+        if [ "$HTTP_CODE" = "200" ] && python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
     sys.exit(0 if isinstance(data, dict) and ('data' in data or 'object' in data) else 1)
 except Exception:
     sys.exit(1)
-" <<< "$RESP" 2>/dev/null; then
+" < "$TMP_BODY" 2>/dev/null; then
             echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢通過 (Port $PORT 回應 HTTP 200 且 JSON 合法)，發布狀態正式為 ready"
             publish_endpoint "ready"
+            rm -f "$TMP_BODY"
             exit 0
         fi
     done
+    rm -f "$TMP_BODY"
     echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢逾時未就緒 (Port $PORT)" >&2
 ) &
 HEALTH_PID=$!

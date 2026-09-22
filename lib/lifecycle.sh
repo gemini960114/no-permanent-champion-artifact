@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# sglang-qwen/lib/lifecycle.sh
+# lib/lifecycle.sh
 # ==============================================================================
-# SGLang 模型端點生命週期共用函式庫：
+# 全域推論模型生命週期共用函式庫 (通用於 SGLang、vLLM、Ollama 等任何推論引擎)：
 # 1. find_available_port: POSIX 原生原子目錄鎖 (mkdir) 連接埠探測與避讓
 # 2. publish_endpoint: 兩階段狀態 (starting -> ready) 原子更新
 # 3. cleanup_endpoint: 鎖擁有者核驗 (Owner Check) 與安全退場清理 (冪等防重入)
@@ -58,11 +58,13 @@ except OSError:
 # ------------------------------------------------------------------------------
 publish_endpoint() {
     local state="${1:-ready}"
-    local tmp_file="$REGISTRY_DIR/sglang_qwen_${SLURM_JOB_ID:-manual}.env.tmp.$$"
+    local prefix="${ENGINE_NAME:-sglang_qwen}_${SLURM_JOB_ID:-manual}"
+    local tmp_file="$REGISTRY_DIR/${prefix}.env.tmp.$$"
     cat > "$tmp_file" <<EOF
-MODEL_NAME=${MODEL_NAME:-Qwen3.8-27B}
-MODEL_ALIAS=${MODEL_ALIAS:-qwen3.8}
+MODEL_NAME=${MODEL_NAME:-}
+MODEL_ALIAS=${MODEL_ALIAS:-}
 RESOLVED_MODEL_PATH=${RESOLVED_MODEL_PATH:-}
+API_KEY_ENV=${API_KEY_ENV:-SGLANG_API_KEY}
 NODE_HOSTNAME=${NODE_HOSTNAME:-}
 NODE_IP=${NODE_IP:-}
 PORT=${PORT:-}
@@ -72,8 +74,9 @@ SLURM_JOB_ID=${SLURM_JOB_ID:-N/A}
 STATE=${state}
 UPDATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 EOF
-    mv -f "$tmp_file" "$ENDPOINT_REGISTRY_FILE"
-    chmod 600 "$ENDPOINT_REGISTRY_FILE" 2>/dev/null || true
+    local target_file="${ENDPOINT_REGISTRY_FILE:-$REGISTRY_DIR/${prefix}.env}"
+    mv -f "$tmp_file" "$target_file"
+    chmod 600 "$target_file" 2>/dev/null || true
 }
 
 # ------------------------------------------------------------------------------
@@ -84,7 +87,7 @@ cleanup_endpoint() {
     [ "${CLEANUP_DONE:-false}" = true ] && return 0
     CLEANUP_DONE=true
     trap - TERM INT EXIT
-    echo "🛑 SGLang 服務正在停止 (Job: ${SLURM_JOB_ID:-N/A})..."
+    echo "🛑 ${ENGINE_NAME:-Inference} 服務正在停止 (Job: ${SLURM_JOB_ID:-N/A})..."
     if [ -n "${HEALTH_PID:-}" ] && kill -0 "$HEALTH_PID" 2>/dev/null; then
         kill -TERM "$HEALTH_PID" 2>/dev/null || true
         wait "$HEALTH_PID" 2>/dev/null || true

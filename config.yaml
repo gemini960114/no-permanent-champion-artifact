@@ -21,9 +21,10 @@ model_list:
       api_key: os.environ/NCHC_GENAI_API_KEY
 
   # ==========================================
-  # HPC 內部 SGLang 服務 (Qwen3.8-27B on H200)
-  # 端點由 start.sh 動態探測並由 generate_runtime_config.py 自動合成
+  # HPC 內部模型服務 (由各模型目錄 Slurm Job 啟動)
+  # 端點由 generate_runtime_config.py 自動探索合成
   # ==========================================
+  # 1. Qwen3.8-27B (sglang-qwen-27b/)
   - model_name: Qwen3.8-27B
     litellm_params:
       model: openai//path/to/work/models/Qwen3.8-27B
@@ -35,6 +36,20 @@ model_list:
       model: openai//path/to/work/models/Qwen3.8-27B
       api_base: os.environ/SGLANG_API_BASE
       api_key: os.environ/SGLANG_API_KEY
+
+  # 2. Qwen3.8-Flash-Next-FP8 (sglang-qwen-flash/)
+  - model_name: Qwen3.8-Flash
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-Flash-Next-FP8
+      api_base: os.environ/SGLANG_FLASH_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  # 3. DeepSeek-V4.1-Flash (vllm-deepseek-flash/)
+  - model_name: DeepSeek-V4-Flash
+    litellm_params:
+      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
+      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
+      api_key: dummy
 
   # ==========================================
   # HPC 內部 GPU 叢集 (vLLM Deployments)

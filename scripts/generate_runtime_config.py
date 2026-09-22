@@ -231,12 +231,17 @@ def main():
     with open(TEMPLATE_CONFIG_PATH, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f) or {}
 
-    # 保留靜態模型 (如 NCHC GenAI Portal 外部模型)
+    # 保留靜態模型 (如 NCHC GenAI Portal 外部模型，排除本機環境變數佔位符)
     original_models = config.get("model_list", [])
     static_models = []
     for m in original_models:
         name = m.get("model_name", "")
-        if name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B") or "qwen3.8" in name.lower():
+        params = m.get("litellm_params", {})
+        api_base = str(params.get("api_base", ""))
+        # 若 api_base 為 os.environ 佔位符或自建模型，交由動態端點註冊
+        if api_base.startswith("os.environ/") and "PORTAL" not in api_base.upper():
+            continue
+        if name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B") or "qwen" in name.lower() or "deepseek" in name.lower():
             continue
         static_models.append(m)
 
@@ -248,7 +253,7 @@ def main():
     if not reconcile_port_locks():
         has_unknown = True
 
-    # 2. 掃描 runtime/endpoints/*.env
+    # 2. 掃描 runtime/endpoints/*.env (通用掃描任何引擎發布之端點)
     env_files = sorted(glob.glob(os.path.join(ENDPOINTS_DIR, "*.env")))
     for env_path in env_files:
         info = parse_env_file(env_path)
@@ -256,8 +261,9 @@ def main():
         state = info.get("STATE", "").lower()
         api_base = info.get("API_BASE", "")
         model_name = info.get("MODEL_NAME", "Qwen3.8-27B")
-        model_alias = info.get("MODEL_ALIAS", "qwen3.8")
-        model_path = info.get("RESOLVED_MODEL_PATH", "/path/to/work/models/Qwen3.8-27B")
+        model_alias = info.get("MODEL_ALIAS", "")
+        model_path = info.get("RESOLVED_MODEL_PATH", "")
+        api_key_env = info.get("API_KEY_ENV", "SGLANG_API_KEY")
         node = info.get("NODE_HOSTNAME", "unknown")
         port = info.get("PORT", "unknown")
 
@@ -283,7 +289,8 @@ def main():
             continue
 
         # 檢查 3：登入節點主動 HTTP 200 + 合法 JSON 探測 (防止假性 ready 或網路斷線)
-        if not is_endpoint_alive(api_base, sglang_key, timeout=2.5):
+        probe_key = os.environ.get(api_key_env, sglang_key)
+        if not is_endpoint_alive(api_base, probe_key, timeout=2.5):
             print(f"⚠️  略過連線失敗端點：Job {job_id} on {node}:{port} (HTTP 200/JSON 檢測未通過)")
             continue
 
@@ -292,6 +299,7 @@ def main():
             "model_alias": model_alias,
             "api_base": api_base,
             "model_path": model_path,
+            "api_key_env": api_key_env,
             "job_id": job_id,
             "node": node,
             "port": port,
@@ -312,19 +320,33 @@ def main():
         if ep.get("model_alias") and ep["model_alias"] not in names_to_register:
             names_to_register.append(ep["model_alias"])
 
-        # 若端點屬於 Qwen3.8 系列，自動補齊標準測試與常見別名
-        if any("qwen3.8" in n.lower() for n in names_to_register):
+        # 智慧別名映射庫 (自動補齊常用名稱)
+        # A. Qwen 27B 系列
+        if any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
             for std_name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8"):
                 if std_name not in names_to_register:
                     names_to_register.append(std_name)
+        # B. Qwen Flash 系列
+        elif any("flash" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+            for std_name in ("Qwen3.8-Flash", "qwen3.8-flash", "Qwen/Qwen3.8-Flash-Next-FP8", "Qwen/Qwen3.8-Flash-Next"):
+                if std_name not in names_to_register:
+                    names_to_register.append(std_name)
+        # C. DeepSeek Flash 系列
+        elif any("deepseek" in n.lower() for n in names_to_register) and any("flash" in n.lower() for n in names_to_register):
+            for std_name in ("DeepSeek-V4-Flash", "deepseek-v4-flash", "deepseek-ai/DeepSeek-V4.1-Flash", "DeepSeek-V4.1-Flash"):
+                if std_name not in names_to_register:
+                    names_to_register.append(std_name)
+
+        model_ref = f"openai/{ep['model_path']}" if ep.get("model_path") else f"openai/{ep['model_name']}"
+        api_key_target = f"os.environ/{ep.get('api_key_env', 'SGLANG_API_KEY')}"
 
         for name in names_to_register:
             deployment = {
                 "model_name": name,
                 "litellm_params": {
-                    "model": f"openai/{ep['model_path']}",
+                    "model": model_ref,
                     "api_base": ep["api_base"],
-                    "api_key": "os.environ/SGLANG_API_KEY"
+                    "api_key": api_key_target
                 }
             }
             if name == ep.get("model_name"):

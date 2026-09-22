@@ -64,16 +64,15 @@ else
     chmod 600 .env
 fi
 
-if [ -f "sglang-qwen/config.env" ]; then
-    chmod 600 sglang-qwen/config.env
-fi
+for conf in sglang-*/config.env vllm-*/config.env; do
+    if [ -f "$conf" ]; then
+        chmod 600 "$conf" 2>/dev/null || true
+    fi
+done
 
-
-# 3. 確保輔助腳本具備執行權限 (含 sglang-qwen 子模組)
-chmod +x start.sh stop.sh test.sh key_tool.py install.sh 2>/dev/null || true
-if [ -d "sglang-qwen" ]; then
-    chmod +x sglang-qwen/*.sh 2>/dev/null || true
-fi
+# 3. 確保輔助腳本與模型啟動腳本具備執行權限
+chmod +x start.sh stop.sh test.sh key_tool.py install.sh lib/*.sh 2>/dev/null || true
+chmod +x sglang-*/*.sh vllm-*/*.sh 2>/dev/null || true
 
 # 4. 驗證 Gateway 安裝
 echo "▶ 驗證 Gateway 安裝版本..."

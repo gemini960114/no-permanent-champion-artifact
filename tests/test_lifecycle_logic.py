@@ -209,6 +209,7 @@ class TestEndpointHttpJsonValidation(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.httpd.shutdown()
+        cls.httpd.server_close()
 
     def test_http_validation(self):
         # 1. 正確 HTTP 200 + 合法 OpenAI JSON

@@ -166,7 +166,11 @@ EOF
     chmod 600 "$ENDPOINT_REGISTRY_FILE" 2>/dev/null || true
 }
 
+CLEANUP_DONE=false
 cleanup_endpoint() {
+    [ "${CLEANUP_DONE:-false}" = true ] && return 0
+    CLEANUP_DONE=true
+    trap - TERM INT EXIT
     echo "🛑 SGLang 服務正在停止 (Job: ${SLURM_JOB_ID:-N/A})..."
     if [ -n "${HEALTH_PID:-}" ] && kill -0 "$HEALTH_PID" 2>/dev/null; then
         kill -TERM "$HEALTH_PID" 2>/dev/null || true

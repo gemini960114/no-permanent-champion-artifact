@@ -3,7 +3,7 @@
 > [!NOTE]
 > **文件狀態：Phase 1A（Endpoint Registry、Port 原子鎖、三態對帳合成與雙向清理機制）已實作並完成實體驗收（經同節點雙 Job 418623/418624 現場實測通過）。**  
 > 更新日期：2026-09-22  
-> **成果簡述**：已完成「POSIX 原生原子目錄鎖 (`mkdir`) 探測 Port」、「端點登錄庫 (`runtime/endpoints/`)」、「Controller 設定合成器 (`scripts/generate_runtime_config.py`)」、「端點生命週期三態自動對帳清理」與「同機多實例連接埠避讓與清理現場實測」。完整排程排空迴圈（flock、定時提交與等待驗收）持續依規劃推進中。相關維運與部署操作請參閱 [README.md](../README.md)。
+> **成果簡述**：已完成「POSIX 原生原子目錄鎖 (`mkdir`) 探測 Port」、「端點登錄庫 (`runtime/endpoints/`)」、「Controller 設定合成器 (`scripts/generate_runtime_config.py`)」、「端點生命週期三態自動對帳清理」與「同機多實例連接埠避讓與清理現場實測」。完整技術細節與測試記錄請參閱 [WALKTHROUGH_PHASE1A.md](./WALKTHROUGH_PHASE1A.md)；相關維運與部署操作請參閱 [README.md](../README.md)。
 
 ## 1. 背景與目標
 
@@ -187,13 +187,13 @@ Slurm Job 本身仍應設定合理的 `--time`，作為即使停止腳本失敗�
 - [x] **建立 Endpoint Registry 規格**：各實例獨立 `.env`，支援 `STATE=starting` 與 `STATE=ready` 二階段原子發布，目錄 `700`、檔案 `600`。
 - [x] **POSIX 原生原子目錄鎖 (`runtime/port-locks/`)**：同機實例自動避讓 (30000->30001)，主 Shell 變數保留，清理時驗證 `job_id` 擁有者防誤刪；超過 10 分鐘無主孤兒鎖自動回收。
 - [x] **Controller 設定合成器 (`scripts/generate_runtime_config.py`)**：
-  - 嚴格 Fail-Closed：未就緒實例一律排除；Slurm 狀態三態判定 (`RUNNING` / `INACTIVE` / `UNKNOWN`)，遇逾時或連線異常（`UNKNOWN`）以及 `SUSPENDED` 嚴格保留鎖與端點，終止生成以策安全。
+  - 嚴格 Fail-Closed：未就緒實例一律排除；Slurm 狀態三態判定 (`RUNNING` / `INACTIVE` / `UNKNOWN`)，遇逾時或連線異常（`UNKNOWN`）嚴格保留鎖與端點並終止生成；`SUSPENDED` 則保留 registry 與 lock，但不納入本次 runtime config，不影響其他健康端點合成。
   - 主動雙重探測：登入節點與計算節點自檢均嚴格驗證 HTTP 200 且為包含 `data`/`object` 之合法 OpenAI JSON。
   - 多實例負載平衡：同名模型自動多重註冊至 LiteLLM Router (`simple-shuffle`)。在雙 Job 情況下，LiteLLM 呈現 7 個 Deployment entries（3 Portal + 2 Qwen 主名稱 + 2 Qwen 別名，對應 5 個實體 Unique Upstreams）。
 - [x] **生命週期行程納管**：追蹤背景健康自檢程序 `HEALTH_PID`，退出 trap 明確執行 `kill` 與 `wait`。
 - [x] **徹底退役 Legacy 依賴**：完全移除 `endpoint.info`，更新 `check_service.sh` 掃描多實例端點。
 - [x] **同節點雙實例實機驗收**：於計算節點 `node-L` 同時派送 2 個 SGLang Qwen Job (418624 與 418623)，實測避讓、載入排除、雙機負載平衡推論 (`./test.sh` 7/7 通過)、單機退場鎖隔離與全數清空回復。
-- [x] **正式單元測試納入 Git 追蹤**：建立 `tests/test_lifecycle_logic.py`，完整涵蓋三態判定、模擬通訊異常、鎖擁有者核對與 JSON 格式驗證。
+- [x] **單元測試與 Shell 整合測試納入 Git 追蹤**：建立 [tests/test_lifecycle_logic.py](../tests/test_lifecycle_logic.py)（涵蓋 Slurm 三態判定、通訊異常過濾、orphan lock 回收與登入節點 HTTP 驗證）與 [tests/test_bash_locks.sh](../tests/test_bash_locks.sh)（涵蓋主 Shell 鎖變數保留、同機連接埠避讓、鎖擁有者核對、Cleanup 冪等防重入與計算節點 HTTP+JSON 校驗），並配合實機同節點雙 Job (418624/418623) 完整驗收。
 
 ### Phase 1B：Morning Controller 啟動排程與全自動生命週期 (規劃中)
 

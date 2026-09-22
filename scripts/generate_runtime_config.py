@@ -158,8 +158,38 @@ def reconcile_port_locks() -> bool:
             try:
                 mtime = os.path.getmtime(lock_path)
                 if now - mtime > 600:
-                    print(f"🧹 清理遺留之無主孤兒 Port 鎖 (逾時 10 分鐘)：{os.path.basename(lock_path)}")
-                    shutil.rmtree(lock_path, ignore_errors=True)
+                    dir_name = os.path.basename(lock_path)
+                    can_remove = True
+                    if "-" in dir_name:
+                        node_part, port_str = dir_name.rsplit("-", 1)
+                        if port_str.isdigit():
+                            import socket
+                            local_hostname = socket.gethostname()
+                            if node_part in (local_hostname, "localhost", "127.0.0.1"):
+                                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                try:
+                                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                                    s.bind(("0.0.0.0", int(port_str)))
+                                except OSError:
+                                    can_remove = False
+                                    print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 本地連接埠仍被佔用，暫予保留防衝突")
+                                finally:
+                                    s.close()
+                            else:
+                                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                try:
+                                    sock.settimeout(0.5)
+                                    res = sock.connect_ex((node_part, int(port_str)))
+                                    if res == 0:
+                                        can_remove = False
+                                        print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 遠端連接埠仍處於監聽狀態，暫予保留防衝突")
+                                except Exception:
+                                    pass
+                                finally:
+                                    sock.close()
+                    if can_remove:
+                        print(f"🧹 清理遺留之無主孤兒 Port 鎖 (逾時 10 分鐘且確認無佔用)：{dir_name}")
+                        shutil.rmtree(lock_path, ignore_errors=True)
                 else:
                     print(f"⏳ 鎖目錄 {os.path.basename(lock_path)} 尚無 job_id 且未達 10 分鐘寬限期，暫予保留")
             except Exception as e:

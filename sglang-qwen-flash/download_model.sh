@@ -26,12 +26,19 @@ mkdir -p "$TARGET_DIR" "$CACHE_DIR"
 export HF_TOKEN="${HF_TOKEN:-}"
 export HF_HOME="$CACHE_DIR"
 
-if command -v hf >/dev/null 2>&1; then
-    hf download "$MODEL_TARGET" --local-dir "$TARGET_DIR"
+TOKEN_ARG=()
+if [ -n "${HF_TOKEN:-}" ]; then
+    TOKEN_ARG=(--token "$HF_TOKEN")
+fi
+
+if command -v uvx >/dev/null 2>&1; then
+    uvx --from huggingface_hub hf download "$MODEL_TARGET" --local-dir "$TARGET_DIR" "${TOKEN_ARG[@]}"
+elif command -v hf >/dev/null 2>&1; then
+    hf download "$MODEL_TARGET" --local-dir "$TARGET_DIR" "${TOKEN_ARG[@]}"
 elif command -v huggingface-cli >/dev/null 2>&1; then
-    huggingface-cli download "$MODEL_TARGET" --local-dir "$TARGET_DIR" --local-dir-use-symlinks False
+    huggingface-cli download "$MODEL_TARGET" --local-dir "$TARGET_DIR" --local-dir-use-symlinks False "${TOKEN_ARG[@]}"
 else
-    echo "❌ 錯誤：未找到 hf 或 huggingface-cli 命令行工具！" >&2
+    echo "❌ 錯誤：未找到 uvx, hf 或 huggingface-cli 命令行工具！" >&2
     exit 1
 fi
 

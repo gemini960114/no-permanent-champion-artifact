@@ -73,6 +73,7 @@ config.runtime.yaml
 *.pid
 **/*.pid
 .litellm.pid
+.litellm_node
 *.sock
 *.socket
 *.lock

@@ -67,11 +67,13 @@ fi
 
 echo "=========================================================="
 echo " 🚀 正在啟動 LiteLLM Proxy (${HOST}:${PORT})"
+echo " 🔹 執行節點 : $(hostname -s)"
 echo " 🔹 設定檔   : ${CONFIG_TO_USE}"
 echo " 🔹 PID 檔案 : ${PID_FILE}"
 echo "=========================================================="
 
-# 記錄目前 PID (exec 保留原 PID)
+# 記錄目前 PID 與執行節點 (exec 保留原 PID)
 echo "$$" > "$PID_FILE"
+hostname -s > "$DIR/.litellm_node"
 
 exec litellm --config "$CONFIG_TO_USE" --host "$HOST" --port "$PORT"

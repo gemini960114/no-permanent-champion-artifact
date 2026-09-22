@@ -37,7 +37,7 @@ if [ -f "$PID_FILE" ]; then
         fi
         STOPPED=true
     fi
-    rm -f "$PID_FILE"
+    rm -f "$PID_FILE" "$DIR/.litellm_node"
 fi
 
 # 方法 2: 安全後備 (僅搜尋當前使用者名下的 litellm 程序)

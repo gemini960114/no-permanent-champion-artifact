@@ -185,7 +185,7 @@ Slurm Job 本身仍應設定合理的 `--time`，作為即使停止腳本失敗�
 ### Phase 1A：核心端點發布、Port 原子鎖與動態合成 (已完成並通過實體驗收)
 
 - [x] **建立 Endpoint Registry 規格**：各實例獨立 `.env`，支援 `STATE=starting` 與 `STATE=ready` 二階段原子發布，目錄 `700`、檔案 `600`。
-- [x] **POSIX 原生原子目錄鎖 (`runtime/port-locks/`)**：同機實例自動避讓 (30000->30001)，主 Shell 變數保留，清理時驗證 `job_id` 擁有者防誤刪；超過 10 分鐘無主孤兒鎖自動回收。
+- [x] **POSIX 原生原子目錄鎖 (`runtime/port-locks/`)**：同機實例自動避讓 (30000->30001)，主 Shell 變數保留，清理時驗證 `job_id` 擁有者防誤刪；超過 10 分鐘無主孤兒鎖在嚴格確認本機 Socket free 或遠端連線 `ECONNREFUSED` 後自動回收，遇逾時/不可達/DNS 異常嚴格保留 (Fail-Closed)。
 - [x] **Controller 設定合成器 (`scripts/generate_runtime_config.py`)**：
   - 嚴格 Fail-Closed：未就緒實例一律排除；Slurm 狀態三態判定 (`RUNNING` / `INACTIVE` / `UNKNOWN`)，遇逾時或連線異常（`UNKNOWN`）嚴格保留鎖與端點並終止生成；`SUSPENDED` 則保留 registry 與 lock，但不納入本次 runtime config，不影響其他健康端點合成。
   - 主動雙重探測：登入節點與計算節點自檢均嚴格驗證 HTTP 200 且為包含 `data`/`object` 之合法 OpenAI JSON。
@@ -193,7 +193,7 @@ Slurm Job 本身仍應設定合理的 `--time`，作為即使停止腳本失敗�
 - [x] **生命週期行程納管**：追蹤背景健康自檢程序 `HEALTH_PID`，退出 trap 明確執行 `kill` 與 `wait`。
 - [x] **徹底退役 Legacy 依賴**：完全移除 `endpoint.info`，更新 `check_service.sh` 掃描多實例端點。
 - [x] **同節點雙實例實機驗收**：於計算節點 `node-L` 同時派送 2 個 SGLang Qwen Job (418624 與 418623)，實測避讓、載入排除、雙機負載平衡推論 (`./test.sh` 7/7 通過)、單機退場鎖隔離與全數清空回復。
-- [x] **單元測試與 Shell 整合測試納入 Git 追蹤**：建立 [tests/test_lifecycle_logic.py](../tests/test_lifecycle_logic.py)（涵蓋 Slurm 三態判定、通訊異常過濾、orphan lock 回收與登入節點 HTTP 驗證）與 [tests/test_bash_locks.sh](../tests/test_bash_locks.sh)（涵蓋主 Shell 鎖變數保留、同機連接埠避讓、鎖擁有者核對、Cleanup 冪等防重入與計算節點 HTTP+JSON 校驗），並配合實機同節點雙 Job (418624/418623) 完整驗收。
+- [x] **Python 單元測試與 Shell 邏輯回歸測試納入 Git 追蹤**：建立 [tests/test_lifecycle_logic.py](../tests/test_lifecycle_logic.py)（涵蓋 Slurm 三態判定、通訊異常過濾、孤兒鎖逾時 + Socket 佔用判定［本機佔用保留、遠端監聽保留、ECONNREFUSED 安全回收、ETIMEDOUT / EHOSTUNREACH / DNS 異常之 Fail-Closed 保留］與登入節點 HTTP 驗證）與 [tests/test_bash_locks.sh](../tests/test_bash_locks.sh)（直接載入正式共用函式庫 [sglang-qwen/lib/lifecycle.sh](../sglang-qwen/lib/lifecycle.sh)，涵蓋主 Shell 鎖變數保留、同機連接埠避讓、鎖擁有者核對、Cleanup 冪等防重入與計算節點 HTTP+JSON 校驗），並配合實機同節點雙 Job (418624/418623) 完整驗收。
 
 ### Phase 1B：Morning Controller 啟動排程與全自動生命週期 (規劃中)
 

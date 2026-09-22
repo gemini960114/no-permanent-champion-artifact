@@ -2,22 +2,35 @@
 # ==============================================================================
 # tests/test_bash_locks.sh
 # ==============================================================================
-# SGLang SLURM Bash 端點鎖、衝突避讓、擁有者核驗與健康自檢邏輯自動化整合測試
+# SGLang SLURM Bash 端點鎖、衝突避讓、擁有者核驗與健康自檢邏輯回歸測試
+# （直接載入 sglang-qwen/lib/lifecycle.sh 正式共用函式庫）
 # ==============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# 載入正式生命週期共用函式庫
+LIB_FILE="$PROJECT_ROOT/sglang-qwen/lib/lifecycle.sh"
+if [ ! -f "$LIB_FILE" ]; then
+    echo "❌ 錯誤：找不到正式函式庫 $LIB_FILE" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "$LIB_FILE"
+
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 PORT_LOCKS_DIR="$TMP_DIR/port-locks"
-mkdir -p -m 700 "$PORT_LOCKS_DIR"
+REGISTRY_DIR="$TMP_DIR/endpoints"
+mkdir -p -m 700 "$PORT_LOCKS_DIR" "$REGISTRY_DIR"
 NODE_HOSTNAME="testnode"
+NODE_IP="127.0.0.1"
 
 echo "=================================================================="
-echo "🧪 執行 SGLang Bash 核心邏輯整合測試 (test_bash_locks.sh)"
+echo "🧪 執行 SGLang Bash 生命週期核心邏輯回歸測試 (test_bash_locks.sh)"
+echo "   (直接引入正式函式庫: sglang-qwen/lib/lifecycle.sh)"
 echo "=================================================================="
 
 # ------------------------------------------------------------------------------
@@ -25,30 +38,11 @@ echo "=================================================================="
 # ------------------------------------------------------------------------------
 echo -e "\n▶ 測試 1: find_available_port 主 Shell 變數保留與同機避讓"
 
-find_available_port() {
-    local candidate="${1:-30000}"
-    local max_attempts=10
-    local attempt=0
-    while [ "$attempt" -lt "$max_attempts" ]; do
-        local lock_dir="$PORT_LOCKS_DIR/${NODE_HOSTNAME}-${candidate}"
-        if mkdir -m 700 "$lock_dir" 2>/dev/null; then
-            echo "${SLURM_JOB_ID:-manual}" > "$lock_dir/job_id"
-            date -u +"%Y-%m-%dT%H:%M:%SZ" > "$lock_dir/created_at"
-            PORT="$candidate"
-            CURRENT_PORT_LOCK="$lock_dir"
-            return 0
-        fi
-        candidate=$((candidate + 1))
-        attempt=$((attempt + 1))
-    done
-    return 1
-}
-
 # 實例 1: Job 12001
 SLURM_JOB_ID="12001"
 PORT=""
 CURRENT_PORT_LOCK=""
-find_available_port 30000
+find_available_port 30000 10
 
 if [ "$PORT" != "30000" ] || [ "$CURRENT_PORT_LOCK" != "$PORT_LOCKS_DIR/testnode-30000" ]; then
     echo "❌ 測試 1-1 失敗：主 Shell 變數未能正確保留！" >&2
@@ -60,7 +54,7 @@ echo "  ✅ 實例 1 成功鎖定 Port 30000 並於主 Shell 保留鎖路徑"
 SLURM_JOB_ID="12002"
 PORT=""
 CURRENT_PORT_LOCK=""
-find_available_port 30000
+find_available_port 30000 10
 
 if [ "$PORT" != "30001" ] || [ "$CURRENT_PORT_LOCK" != "$PORT_LOCKS_DIR/testnode-30001" ]; then
     echo "❌ 測試 1-2 失敗：同機避讓未能自動遞增至 30001！" >&2
@@ -69,122 +63,110 @@ fi
 echo "  ✅ 實例 2 成功偵測 30000 佔用並自動避讓鎖定 Port 30001"
 
 # ------------------------------------------------------------------------------
-# 測試 2: Lock Cleanup 擁有者驗證 (Owner Verification)
+# 測試 2: cleanup_endpoint 擁有者驗證 (Owner Verification) 防誤刪
 # ------------------------------------------------------------------------------
 echo -e "\n▶ 測試 2: cleanup_endpoint 鎖擁有者核對防誤刪"
 
-cleanup_lock_check() {
-    local target_lock="$1"
-    local caller_job="$2"
-    if [ -n "$target_lock" ] && [ -d "$target_lock" ]; then
-        local lock_owner=""
-        if [ -f "$target_lock/job_id" ]; then
-            lock_owner=$(cat "$target_lock/job_id" 2>/dev/null || true)
-        fi
-        if [ "$lock_owner" = "$caller_job" ]; then
-            rm -rf -- "$target_lock"
-            return 0
-        else
-            return 2 # 擁有者不符，拒絕刪除
-        fi
-    fi
-    return 1
-}
+# 冒充者 Job 99999 嘗試清理 Job 12001 的鎖目錄 (testnode-30000)
+SLURM_JOB_ID="99999"
+CURRENT_PORT_LOCK="$PORT_LOCKS_DIR/testnode-30000"
+ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_99999.env"
+HEALTH_PID=""
+SERVER_PID=""
+CLEANUP_DONE=false
 
-# 冒充者 Job 99999 嘗試刪除 Job 12001 的鎖目錄 (node-30000)
-if cleanup_lock_check "$PORT_LOCKS_DIR/testnode-30000" "99999"; then
-    echo "❌ 測試 2-1 失敗：非擁有者竟然成功刪除了鎖目錄！" >&2
-    exit 1
-fi
+cleanup_endpoint 2>/dev/null || true
+
 if [ ! -d "$PORT_LOCKS_DIR/testnode-30000" ]; then
-    echo "❌ 測試 2-1 失敗：鎖目錄遭誤刪！" >&2
+    echo "❌ 測試 2-1 失敗：鎖目錄遭非擁有者誤刪！" >&2
     exit 1
 fi
-echo "  ✅ 成功攔截非擁有者 (Job 99999) 對 30000 鎖之誤刪"
+echo "  ✅ 成功攔截非擁有者 (Job 99999) 對 30000 鎖目錄之誤刪"
 
 # 合法擁有者 Job 12001 執行清理
-cleanup_lock_check "$PORT_LOCKS_DIR/testnode-30000" "12001"
+SLURM_JOB_ID="12001"
+CURRENT_PORT_LOCK="$PORT_LOCKS_DIR/testnode-30000"
+ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_qwen_12001.env"
+touch "$ENDPOINT_REGISTRY_FILE"
+CLEANUP_DONE=false
+
+cleanup_endpoint
+
 if [ -d "$PORT_LOCKS_DIR/testnode-30000" ]; then
     echo "❌ 測試 2-2 失敗：合法擁有者未能清除鎖目錄！" >&2
     exit 1
 fi
-echo "  ✅ 合法擁有者 (Job 12001) 成功清理 30000 鎖目錄"
+if [ -f "$ENDPOINT_REGISTRY_FILE" ]; then
+    echo "❌ 測試 2-2 失敗：端點登錄檔未能被清除！" >&2
+    exit 1
+fi
+echo "  ✅ 合法擁有者 (Job 12001) 成功清理 30000 鎖目錄與端點註冊檔"
+
 # 驗證 Job 12002 的鎖依然完好
 [ -d "$PORT_LOCKS_DIR/testnode-30001" ]
 echo "  ✅ 其他實例 (Job 12002) 之 30001 鎖完好無損"
 
 # ------------------------------------------------------------------------------
-# 測試 3: Cleanup 防重入 (Idempotency / Single Execution)
+# 測試 3: cleanup_endpoint 防重入 (Idempotency)
 # ------------------------------------------------------------------------------
 echo -e "\n▶ 測試 3: cleanup_endpoint 冪等性與防重入"
 
-EXEC_COUNT=0
 CLEANUP_DONE=false
+CURRENT_PORT_LOCK=""
+ENDPOINT_REGISTRY_FILE=""
 
-mock_cleanup() {
-    [ "${CLEANUP_DONE:-false}" = true ] && return 0
-    CLEANUP_DONE=true
-    EXEC_COUNT=$((EXEC_COUNT + 1))
-}
-
-# 模擬 TERM 與 EXIT 連續觸發
-mock_cleanup
-mock_cleanup
-mock_cleanup
-
-if [ "$EXEC_COUNT" -ne 1 ]; then
-    echo "❌ 測試 3 失敗：Cleanup 執行了 $EXEC_COUNT 次（預期僅 1 次）！" >&2
+# 第 1 次觸發
+cleanup_endpoint
+if [ "$CLEANUP_DONE" != true ]; then
+    echo "❌ 測試 3 失敗：Cleanup 執行後 CLEANUP_DONE 旗標未設為 true！" >&2
     exit 1
 fi
-echo "  ✅ Cleanup 防重入機制運作正常（多次觸發僅執行一次）"
+
+# 第 2 次與第 3 次重入觸發 (應直接 return 0)
+cleanup_endpoint
+cleanup_endpoint
+echo "  ✅ Cleanup 防重入機制正常（多次觸發安全冪等）"
 
 # ------------------------------------------------------------------------------
-# 測試 4: 計算節點自檢 HTTP Status 與 JSON 雙重校驗邏輯
+# 測試 4: 計算節點自檢 HTTP Status 與 JSON 雙重校驗邏輯 (validate_health_response)
 # ------------------------------------------------------------------------------
-echo -e "\n▶ 測試 4: 計算節點自檢 HTTP 200 + 合法 JSON 雙重校驗"
+echo -e "\n▶ 測試 4: 計算節點自檢 HTTP 200 + 合法 JSON 雙重校驗 (validate_health_response)"
 
-validate_health() {
-    local http_code="$1"
-    local body_content="$2"
-    local tmp_file
-    tmp_file=$(mktemp)
-    echo "$body_content" > "$tmp_file"
-    if [ "$http_code" = "200" ] && python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    sys.exit(0 if isinstance(data, dict) and ('data' in data or 'object' in data) else 1)
-except Exception:
-    sys.exit(1)
-" < "$tmp_file" 2>/dev/null; then
-        rm -f "$tmp_file"
-        return 0
-    fi
-    rm -f "$tmp_file"
-    return 1
-}
+TMP_BODY=$(mktemp)
+trap 'rm -rf "$TMP_DIR" "$TMP_BODY"' EXIT
 
-# 1. HTTP 200 且合法 JSON -> 應成功
-if ! validate_health "200" '{"object": "list", "data": []}'; then
+# 4-1. HTTP 200 且合法 OpenAI JSON
+echo '{"object": "list", "data": [{"id": "Qwen3.8-27B"}]}' > "$TMP_BODY"
+if ! validate_health_response "200" "$TMP_BODY"; then
     echo "❌ 測試 4-1 失敗：合法回應未能判定通過！" >&2
     exit 1
 fi
-echo "  ✅ HTTP 200 且合規 JSON 成功判定為 ready"
+echo "  ✅ HTTP 200 且合規 JSON 成功判定通過"
 
-# 2. HTTP 500 但包含 JSON -> 應拒絕
-if validate_health "500" '{"object": "error", "data": "failed"}'; then
+# 4-2. HTTP 500 但包含 JSON 錯誤頁面 -> 應拒絕
+echo '{"object": "error", "message": "internal error"}' > "$TMP_BODY"
+if validate_health_response "500" "$TMP_BODY"; then
     echo "❌ 測試 4-2 失敗：HTTP 500 錯誤回應被誤判為通過！" >&2
     exit 1
 fi
-echo "  ✅ HTTP 500 錯誤回應成功攔截"
+echo "  ✅ HTTP 500 錯誤回應成功攔截拒絕"
 
-# 3. HTTP 200 但非合規 JSON -> 應拒絕
-if validate_health "200" '<html>Bad Gateway</html>'; then
-    echo "❌ 測試 4-3 失敗：HTML 內容被誤判為通過！" >&2
+# 4-3. HTTP 200 但為 HTML 頁面 -> 應拒絕
+echo '<html><head><title>Bad Gateway</title></head></html>' > "$TMP_BODY"
+if validate_health_response "200" "$TMP_BODY"; then
+    echo "❌ 測試 4-3 失敗：HTML 非合規格式被誤判為通過！" >&2
     exit 1
 fi
-echo "  ✅ HTML 非預期格式成功攔截"
+echo "  ✅ HTML 非合規格式成功攔截拒絕"
+
+# 4-4. HTTP 200 但為非 OpenAI 規格之 JSON (缺 data 與 object 欄位) -> 應拒絕
+echo '{"status": "initializing", "progress": 0.3}' > "$TMP_BODY"
+if validate_health_response "200" "$TMP_BODY"; then
+    echo "❌ 測試 4-4 失敗：非合規 JSON 結構被誤判為通過！" >&2
+    exit 1
+fi
+echo "  ✅ 非 OpenAI 規格 JSON 成功攔截拒絕"
 
 echo -e "\n=================================================================="
-echo "🎉 ALL SGLANG BASH LOCKS & HEALTH LOGIC TESTS PASSED!"
+echo "🎉 ALL SGLANG BASH LIFECYCLE REGRESSION TESTS PASSED!"
 echo "=================================================================="

@@ -159,34 +159,59 @@ def reconcile_port_locks() -> bool:
                 mtime = os.path.getmtime(lock_path)
                 if now - mtime > 600:
                     dir_name = os.path.basename(lock_path)
-                    can_remove = True
+                    can_remove = False
                     if "-" in dir_name:
                         node_part, port_str = dir_name.rsplit("-", 1)
                         if port_str.isdigit():
                             import socket
+                            import errno
                             local_hostname = socket.gethostname()
                             if node_part in (local_hostname, "localhost", "127.0.0.1"):
                                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                                 try:
                                     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                                     s.bind(("0.0.0.0", int(port_str)))
-                                except OSError:
+                                    can_remove = True
+                                except OSError as e:
                                     can_remove = False
-                                    print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 本地連接埠仍被佔用，暫予保留防衝突")
+                                    clean_ok = False
+                                    print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 本地連接埠仍被佔用 ({e})，暫予保留防衝突")
                                 finally:
                                     s.close()
                             else:
-                                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                                 try:
-                                    sock.settimeout(0.5)
-                                    res = sock.connect_ex((node_part, int(port_str)))
-                                    if res == 0:
-                                        can_remove = False
-                                        print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 遠端連接埠仍處於監聽狀態，暫予保留防衝突")
-                                except Exception:
-                                    pass
-                                finally:
-                                    sock.close()
+                                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                    try:
+                                        sock.settimeout(1.0)
+                                        result = sock.connect_ex((node_part, int(port_str)))
+                                        if result == 0:
+                                            # 明確正在監聽
+                                            can_remove = False
+                                            print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 遠端連接埠仍處於監聽狀態，暫予保留防衝突")
+                                        elif result == errno.ECONNREFUSED:
+                                            # 主機可達、port 明確未監聽
+                                            can_remove = True
+                                        else:
+                                            # timeout、host unreachable、network unreachable 等狀態未知
+                                            can_remove = False
+                                            clean_ok = False
+                                            err_name = errno.errorcode.get(result, f"ERR_{result}")
+                                            print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 遠端探測異常 ({err_name})，狀態未知，嚴格保留防衝突")
+                                    finally:
+                                        sock.close()
+                                except (socket.gaierror, OSError) as exc:
+                                    can_remove = False
+                                    clean_ok = False
+                                    print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 網路/DNS 連線例外 ({exc})，狀態未知，嚴格保留防衝突")
+                        else:
+                            can_remove = False
+                            clean_ok = False
+                            print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 格式不合規 (非 node-port)，嚴格保留防衝突")
+                    else:
+                        can_remove = False
+                        clean_ok = False
+                        print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 格式不合規 (缺分隔符號)，嚴格保留防衝突")
+
                     if can_remove:
                         print(f"🧹 清理遺留之無主孤兒 Port 鎖 (逾時 10 分鐘且確認無佔用)：{dir_name}")
                         shutil.rmtree(lock_path, ignore_errors=True)

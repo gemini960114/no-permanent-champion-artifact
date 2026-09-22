@@ -22,6 +22,8 @@ import unittest
 import subprocess
 import http.server
 import threading
+import errno
+import socket
 from unittest.mock import patch, MagicMock
 
 # 載入受測模組
@@ -148,24 +150,120 @@ class TestPortLockReconciliation(unittest.TestCase):
         # SUSPENDED 保留以防搶鎖衝突！
         self.assertTrue(os.path.exists(lock_suspended))
 
-    def test_orphan_lock_reclamation(self):
+    def test_orphan_lock_recent_and_local(self):
+        """測試無 job_id 孤兒鎖：未達寬限期保留，本機 port free 清除，本機 port occupied 保留"""
         # 1. 建立剛產生不久的無 job_id 目錄 (未達 10 分鐘)
-        recent_orphan = os.path.join(self.test_dir, "node-30010")
+        recent_orphan = os.path.join(self.test_dir, "127.0.0.1-39980")
         os.makedirs(recent_orphan, exist_ok=True)
 
-        # 2. 建立逾時的孤兒目錄 (> 600 秒)
-        expired_orphan = os.path.join(self.test_dir, "node-30011")
-        os.makedirs(expired_orphan, exist_ok=True)
+        # 2. 建立逾時且本地 Port 空閒的孤兒目錄 (> 600 秒)
+        expired_free = os.path.join(self.test_dir, "127.0.0.1-39981")
+        os.makedirs(expired_free, exist_ok=True)
         old_time = time.time() - 700
-        os.utime(expired_orphan, (old_time, old_time))
+        os.utime(expired_free, (old_time, old_time))
 
         res = grc.reconcile_port_locks()
         self.assertTrue(res)
-
-        # 未達寬限期之孤兒鎖應暫予保留
+        # 未達寬限期應保留
         self.assertTrue(os.path.exists(recent_orphan))
-        # 超過 10 分鐘之無主孤兒鎖應被清除
-        self.assertFalse(os.path.exists(expired_orphan))
+        # 逾時且 port free 應被安全清除
+        self.assertFalse(os.path.exists(expired_free))
+
+    def test_orphan_lock_local_occupied(self):
+        """測試本機 Port 正在佔用時，孤兒鎖嚴格保留且標記 clean_ok=False (Fail-Closed)"""
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind(("127.0.0.1", 0))
+        s.listen(1)
+        bound_port = s.getsockname()[1]
+        try:
+            expired_occupied = os.path.join(self.test_dir, f"127.0.0.1-{bound_port}")
+            os.makedirs(expired_occupied, exist_ok=True)
+            old_time = time.time() - 700
+            os.utime(expired_occupied, (old_time, old_time))
+
+            res = grc.reconcile_port_locks()
+            # 實體 port 仍被佔用，應回傳 False (Fail-Closed) 並保留鎖
+            self.assertFalse(res)
+            self.assertTrue(os.path.exists(expired_occupied))
+        finally:
+            s.close()
+
+    def test_orphan_lock_remote_scenarios(self):
+        """測試遠端節點孤兒鎖之各類 Socket 探測情境：
+        - ECONNREFUSED: 刪除 orphan lock (Port free)
+        - 0 (listening): 保留 orphan lock
+        - ETIMEDOUT / EHOSTUNREACH / ENETUNREACH: 保留 (Fail-Closed)
+        - DNS 解析例外 (gaierror): 保留 (Fail-Closed)
+        """
+        old_time = time.time() - 700
+
+        # 情境 A: 遠端 ECONNREFUSED -> 主機可達、Port free -> 應刪除，clean_ok = True
+        lock_refused = os.path.join(self.test_dir, "remotehost-30001")
+        os.makedirs(lock_refused, exist_ok=True)
+        os.utime(lock_refused, (old_time, old_time))
+
+        with patch("socket.socket") as mock_sock_cls:
+            mock_sock = MagicMock()
+            mock_sock_cls.return_value = mock_sock
+            mock_sock.connect_ex.return_value = errno.ECONNREFUSED
+
+            res = grc.reconcile_port_locks()
+            self.assertTrue(res)
+            self.assertFalse(os.path.exists(lock_refused))
+
+        # 情境 B: 遠端 0 (正在監聽) -> 應保留，不刪除
+        lock_listening = os.path.join(self.test_dir, "remotehost-30002")
+        os.makedirs(lock_listening, exist_ok=True)
+        os.utime(lock_listening, (old_time, old_time))
+
+        with patch("socket.socket") as mock_sock_cls:
+            mock_sock = MagicMock()
+            mock_sock_cls.return_value = mock_sock
+            mock_sock.connect_ex.return_value = 0
+
+            res = grc.reconcile_port_locks()
+            # 監聽中，鎖目錄保留
+            self.assertTrue(os.path.exists(lock_listening))
+
+        shutil.rmtree(lock_listening, ignore_errors=True)
+
+        # 情境 C: 遠端異常代碼 (ETIMEDOUT / EHOSTUNREACH / ENETUNREACH) -> Fail-Closed 保留
+        for err_code, err_name in [
+            (errno.ETIMEDOUT, "ETIMEDOUT"),
+            (errno.EHOSTUNREACH, "EHOSTUNREACH"),
+            (errno.ENETUNREACH, "ENETUNREACH")
+        ]:
+            lock_err = os.path.join(self.test_dir, f"remotehost-{err_code}")
+            os.makedirs(lock_err, exist_ok=True)
+            os.utime(lock_err, (old_time, old_time))
+
+            with patch("socket.socket") as mock_sock_cls:
+                mock_sock = MagicMock()
+                mock_sock_cls.return_value = mock_sock
+                mock_sock.connect_ex.return_value = err_code
+
+                res = grc.reconcile_port_locks()
+                self.assertFalse(res, f"Expected clean_ok=False for {err_name}")
+                self.assertTrue(os.path.exists(lock_err), f"Expected lock retained for {err_name}")
+
+            shutil.rmtree(lock_err, ignore_errors=True)
+
+        # 情境 D: DNS 解析例外 (socket.gaierror) -> 狀態未知 -> 應保留，clean_ok = False (Fail-Closed)
+        lock_dns_err = os.path.join(self.test_dir, "unresolvablehost-30003")
+        os.makedirs(lock_dns_err, exist_ok=True)
+        os.utime(lock_dns_err, (old_time, old_time))
+
+        with patch("socket.socket") as mock_sock_cls:
+            mock_sock = MagicMock()
+            mock_sock_cls.return_value = mock_sock
+            mock_sock.connect_ex.side_effect = socket.gaierror(-2, "Name or service not known")
+
+            res = grc.reconcile_port_locks()
+            self.assertFalse(res)
+            self.assertTrue(os.path.exists(lock_dns_err))
+
+        shutil.rmtree(lock_dns_err, ignore_errors=True)
 
 
 class TestEndpointHttpJsonValidation(unittest.TestCase):

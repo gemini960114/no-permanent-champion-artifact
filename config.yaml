@@ -37,6 +37,24 @@ model_list:
       api_base: os.environ/SGLANG_API_BASE
       api_key: os.environ/SGLANG_API_KEY
 
+  - model_name: qwen-27b
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-27B
+      api_base: os.environ/SGLANG_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  - model_name: sglang-qwen-27b
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-27B
+      api_base: os.environ/SGLANG_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  - model_name: Qwen/Qwen3.8-27B-FP8
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-27B
+      api_base: os.environ/SGLANG_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
   # 2. Qwen3.8-Flash-Next-FP8 (sglang-qwen-flash/)
   - model_name: Qwen3.8-Flash
     litellm_params:
@@ -44,8 +62,56 @@ model_list:
       api_base: os.environ/SGLANG_FLASH_API_BASE
       api_key: os.environ/SGLANG_API_KEY
 
+  - model_name: qwen3.8-flash
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-Flash-Next-FP8
+      api_base: os.environ/SGLANG_FLASH_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  - model_name: qwen-flash
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-Flash-Next-FP8
+      api_base: os.environ/SGLANG_FLASH_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  - model_name: sglang-qwen-flash
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-Flash-Next-FP8
+      api_base: os.environ/SGLANG_FLASH_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
+  - model_name: Qwen/Qwen3.8-Flash-Next-FP8
+    litellm_params:
+      model: openai//path/to/work/models/Qwen3.8-Flash-Next-FP8
+      api_base: os.environ/SGLANG_FLASH_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+
   # 3. DeepSeek-V4.1-Flash (vllm-deepseek-flash/)
   - model_name: DeepSeek-V4-Flash
+    litellm_params:
+      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
+      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
+      api_key: dummy
+
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
+      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
+      api_key: dummy
+
+  - model_name: deepseek-flash
+    litellm_params:
+      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
+      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
+      api_key: dummy
+
+  - model_name: vllm-deepseek-flash
+    litellm_params:
+      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
+      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
+      api_key: dummy
+
+  - model_name: deepseek-ai/DeepSeek-V4.1-Flash
     litellm_params:
       model: openai//path/to/work/models/DeepSeek-V4.1-Flash
       api_base: os.environ/VLLM_DEEPSEEK_API_BASE

@@ -320,20 +320,20 @@ def main():
         if ep.get("model_alias") and ep["model_alias"] not in names_to_register:
             names_to_register.append(ep["model_alias"])
 
-        # 智慧別名映射庫 (自動補齊常用名稱)
+        # 智慧別名映射庫 (自動補齊常用代號與簡稱)
         # A. Qwen 27B 系列
         if any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
-            for std_name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8"):
+            for std_name in ("Qwen3.8-27B", "qwen3.8", "qwen-27b", "sglang-qwen-27b", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B"):
                 if std_name not in names_to_register:
                     names_to_register.append(std_name)
         # B. Qwen Flash 系列
         elif any("flash" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
-            for std_name in ("Qwen3.8-Flash", "qwen3.8-flash", "Qwen/Qwen3.8-Flash-Next-FP8", "Qwen/Qwen3.8-Flash-Next"):
+            for std_name in ("Qwen3.8-Flash", "qwen3.8-flash", "qwen-flash", "sglang-qwen-flash", "Qwen/Qwen3.8-Flash-Next-FP8", "Qwen/Qwen3.8-Flash-Next"):
                 if std_name not in names_to_register:
                     names_to_register.append(std_name)
         # C. DeepSeek Flash 系列
         elif any("deepseek" in n.lower() for n in names_to_register) and any("flash" in n.lower() for n in names_to_register):
-            for std_name in ("DeepSeek-V4-Flash", "deepseek-v4-flash", "deepseek-ai/DeepSeek-V4.1-Flash", "DeepSeek-V4.1-Flash"):
+            for std_name in ("DeepSeek-V4-Flash", "deepseek-v4-flash", "deepseek-flash", "vllm-deepseek-flash", "deepseek-ai/DeepSeek-V4.1-Flash", "DeepSeek-V4.1-Flash", "deepseek-ai/DeepSeek-V4-Flash"):
                 if std_name not in names_to_register:
                     names_to_register.append(std_name)
 

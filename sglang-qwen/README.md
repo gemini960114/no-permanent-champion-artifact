@@ -11,7 +11,8 @@
 | [`config.env`](file:///path/to/work/github/litellm-proxy/sglang-qwen/config.env) | 配置設定 | 集中管理所有 SLURM 資源配額、容器路徑、模型名稱與 SGLang 核心推論參數 |
 | [`download_model.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/download_model.sh) | 下載工具 | 透過 `uvx --from huggingface_hub` 高速下載 HuggingFace 模型權重至 `/path/to/work/models` |
 | [`submit_slurm.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/submit_slurm.sh) | 派送腳本 | 支援 `-w <Node>` 指定節點、`--dry-run` 與自訂參數，安全派送作業至 SLURM |
-| [`sglang_server.slurm`](file:///path/to/work/github/litellm-proxy/sglang-qwen/sglang_server.slurm) | SLURM 核心 | 申請 1 顆 H200 GPU、內建「同節點 Port 自動避讓 (30000->30001)」與原子發布 endpoint 狀態 |
+| [`sglang_server.slurm`](file:///path/to/work/github/litellm-proxy/sglang-qwen/sglang_server.slurm) | SLURM 核心 | 申請 1 顆 H200 GPU、支援同機 Port 自動避讓與二階段狀態發布 |
+| [`lib/lifecycle.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/lib/lifecycle.sh) | 共用函式庫 | 封裝 Port 原子鎖搶佔、二階段發布、退場清理核驗與 HTTP 200/JSON 自檢 |
 | [`check_service.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/check_service.sh) | 檢查工具 | 即時查詢 SLURM 佇列、掃描 `runtime/endpoints/*.env`、測試 `/v1/models` 並檢視最新日誌 |
 | `../runtime/endpoints/` | 狀態註冊庫 | 存放各實例專屬的 `.env` 狀態檔，供 LiteLLM 自動合成多實例負載平衡設定 |
 | `../runtime/port-locks/` | Port 鎖目錄 | 存放各實例原子預約的節點連接埠鎖目錄，防範同機連接埠衝突 |
@@ -91,7 +92,7 @@ SGLang 啟動時會歷經兩個階段：
 tail -f logs/sglang-sglang_qwen-*.err
 ```
 
-當看到以下訊息時，代表 SGLang 服務已完全就緒：
+當看到以下訊息且背景自檢通過時，腳本會原子發布狀態為 `STATE=ready`：
 ```text
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:30000 (Press CTRL+C to quit)
@@ -99,34 +100,18 @@ INFO:     Uvicorn running on http://0.0.0.0:30000 (Press CTRL+C to quit)
 
 ---
 
-### 步驟 4：整合至 LiteLLM Proxy Gateway
+### 步驟 4：整合至 LiteLLM Proxy Gateway (全自動動態合成)
 
-當服務就緒後，`./check_service.sh` 會顯示分配到的節點名稱（例如 `node-H`）。
+本架構已實現全自動動態註冊，**完全無需手動編輯 `config.yaml` 或填寫節點 IP**！
 
-在根目錄的 [`config.yaml`](file:///path/to/work/github/litellm-proxy/config.yaml) 中加入以下設定：
-
-```yaml
-  # ==========================================
-  # HPC 內部 SGLang 服務 (Qwen3.8-27B on H200)
-  # ==========================================
-  - model_name: Qwen3.8-27B
-    litellm_params:
-      model: openai//path/to/work/models/Qwen3.8-27B
-      api_base: http://node-H:30000/v1
-      api_key: dummy
-
-  - model_name: qwen3.8
-    litellm_params:
-      model: openai//path/to/work/models/Qwen3.8-27B
-      api_base: http://node-H:30000/v1
-      api_key: dummy
-```
-
-重啟或啟動 LiteLLM Gateway：
+當後端實例通過自檢並發布 `STATE=ready` 後，回到專案根目錄啟動／重啟 Gateway：
 ```bash
 cd /path/to/work/github/litellm-proxy
-./stop.sh && ./start.sh > litellm.log 2>&1 &
+
+# 自動對帳、探測健康實例並重啟 LiteLLM
+./start.sh
 ```
+`start.sh` 會自動調用 `scripts/generate_runtime_config.py`，將所有就緒的 SGLang 實例聚合至 `config.runtime.yaml` 並自動配置負載平衡。
 
 ---
 

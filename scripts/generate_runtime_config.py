@@ -236,7 +236,7 @@ def main():
     static_models = []
     for m in original_models:
         name = m.get("model_name", "")
-        if name in ("Qwen3.8-27B", "qwen3.8"):
+        if name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B") or "qwen3.8" in name.lower():
             continue
         static_models.append(m)
 
@@ -306,23 +306,31 @@ def main():
     dynamic_deployments = []
     alias_deployments = []
     for ep in discovered_endpoints:
-        dynamic_deployments.append({
-            "model_name": ep["model_name"],
-            "litellm_params": {
-                "model": f"openai/{ep['model_path']}",
-                "api_base": ep["api_base"],
-                "api_key": "os.environ/SGLANG_API_KEY"
-            }
-        })
-        if ep["model_alias"]:
-            alias_deployments.append({
-                "model_name": ep["model_alias"],
+        names_to_register = []
+        if ep.get("model_name"):
+            names_to_register.append(ep["model_name"])
+        if ep.get("model_alias") and ep["model_alias"] not in names_to_register:
+            names_to_register.append(ep["model_alias"])
+
+        # 若端點屬於 Qwen3.8 系列，自動補齊標準測試與常見別名
+        if any("qwen3.8" in n.lower() for n in names_to_register):
+            for std_name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8"):
+                if std_name not in names_to_register:
+                    names_to_register.append(std_name)
+
+        for name in names_to_register:
+            deployment = {
+                "model_name": name,
                 "litellm_params": {
                     "model": f"openai/{ep['model_path']}",
                     "api_base": ep["api_base"],
                     "api_key": "os.environ/SGLANG_API_KEY"
                 }
-            })
+            }
+            if name == ep.get("model_name"):
+                dynamic_deployments.append(deployment)
+            else:
+                alias_deployments.append(deployment)
 
     config["model_list"] = static_models + dynamic_deployments + alias_deployments
 

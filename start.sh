@@ -30,13 +30,13 @@ fi
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-54821}"
 
-# 3. 檢查是否已有正在運行的實例
+# 3. 檢查是否已有正在運行的實例 (支援冪等自動重啟)
 if [ -f "$PID_FILE" ]; then
     EXISTING_PID=$(cat "$PID_FILE" 2>/dev/null || true)
     if [ -n "$EXISTING_PID" ] && kill -0 "$EXISTING_PID" 2>/dev/null; then
-        echo "⚠️  LiteLLM Proxy 已在運行中 (PID: $EXISTING_PID, Port: $PORT)"
-        echo "   若需重啟，請先執行 ./stop.sh"
-        exit 1
+        echo "🔄 偵測到現有 LiteLLM Proxy 實例 (PID: $EXISTING_PID)，自動執行優雅重啟以套用最新端點..."
+        "$DIR/stop.sh" || true
+        sleep 1
     else
         rm -f "$PID_FILE"
     fi

@@ -27,7 +27,7 @@ if [ -f "$DIR/.env" ]; then
     set +a
 fi
 
-HOST="${HOST:-127.0.0.1}"
+HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-54821}"
 
 # 3. 檢查是否已有正在運行的實例 (支援冪等自動重啟)

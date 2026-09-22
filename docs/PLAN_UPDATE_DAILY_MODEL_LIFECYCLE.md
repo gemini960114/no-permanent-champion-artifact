@@ -192,8 +192,8 @@ Slurm Job 本身仍應設定合理的 `--time`，作為即使停止腳本失敗�
   - 多實例負載平衡：同名模型自動多重註冊至 LiteLLM Router (`simple-shuffle`)。在雙 Job 情況下，LiteLLM 呈現 7 個 Deployment entries（3 Portal + 2 Qwen 主名稱 + 2 Qwen 別名，對應 5 個實體 Unique Upstreams）。
 - [x] **生命週期行程納管**：追蹤背景健康自檢程序 `HEALTH_PID`，退出 trap 明確執行 `kill` 與 `wait`。
 - [x] **徹底退役 Legacy 依賴**：完全移除 `endpoint.info`，更新 `check_service.sh` 掃描多實例端點。
-- [x] **同節點雙實例實機驗收**：於計算節點 `node-L` 同時派送 2 個 SGLang Qwen Job (418624 與 418623)，實測避讓、載入排除、雙機負載平衡推論 (`./test.sh` 7/7 通過)、單機退場鎖隔離與全數清空回復。
-- [x] **Python 單元測試與 Shell 邏輯回歸測試納入 Git 追蹤**：建立 [tests/test_lifecycle_logic.py](../tests/test_lifecycle_logic.py)（涵蓋 Slurm 三態判定、通訊異常過濾、孤兒鎖逾時 + Socket 佔用判定［本機佔用保留、遠端監聽保留、ECONNREFUSED 安全回收、ETIMEDOUT / EHOSTUNREACH / DNS 異常之 Fail-Closed 保留］與登入節點 HTTP 驗證）與 [tests/test_bash_locks.sh](../tests/test_bash_locks.sh)（直接載入正式共用函式庫 [sglang-qwen/lib/lifecycle.sh](../sglang-qwen/lib/lifecycle.sh)，涵蓋主 Shell 鎖變數保留、同機連接埠避讓、鎖擁有者核對、Cleanup 冪等防重入與計算節點 HTTP+JSON 校驗），並配合實機同節點雙 Job (418624/418623) 完整驗收。
+- [x] **Slurm 計算節點實機驗收**：於計算節點 `node-L` 同時派送 2 個 SGLang Qwen Job (418624 與 418623) 驗證避讓與推論；於 `node-N` 派送新版共用函式庫 Job 419043 實機驗證 Spool 環境函式庫載入、Port 搶佔、二階段狀態過濾與單次退場清理。
+- [x] **Python 單元測試與 Shell 邏輯回歸測試納入 Git 追蹤**：建立 [tests/test_lifecycle_logic.py](../tests/test_lifecycle_logic.py)（涵蓋 Slurm 三態判定、通訊異常過濾、孤兒鎖逾時 + Socket 佔用判定［本機佔用保留、遠端監聽保留、ECONNREFUSED 安全回收、ETIMEDOUT / EHOSTUNREACH / DNS 異常之 Fail-Closed 保留］與登入節點 HTTP 驗證）與 [tests/test_bash_locks.sh](../tests/test_bash_locks.sh)（直接載入正式共用函式庫 [sglang-qwen/lib/lifecycle.sh](../sglang-qwen/lib/lifecycle.sh)，涵蓋主 Shell 鎖變數保留、同機連接埠避讓、鎖擁有者核對、Cleanup 冪等防重入、計算節點 HTTP+JSON 校驗與 Slurm Spool 環境路徑動態模擬），並配合實機雙 Job (418624/418623/419043) 完整驗收。
 
 ### Phase 1B：Morning Controller 啟動排程與全自動生命週期 (規劃中)
 

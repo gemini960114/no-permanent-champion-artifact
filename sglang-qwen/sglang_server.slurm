@@ -96,9 +96,9 @@ SERVER_PID=""
 
 # ------------------------------------------------------------------------------
 # 載入生命週期共用函式庫 (Port 原子鎖、兩階段發布、退場清理與健康驗證)
+# 注意：在 SLURM 計算節點上 BASH_SOURCE[0] 指向 /var/spool/slurmd，故必須使用 $WORK_DIR
 # ------------------------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_LIFECYCLE="${SCRIPT_DIR}/lib/lifecycle.sh"
+LIB_LIFECYCLE="${SGLANG_LIFECYCLE_LIB:-$WORK_DIR/lib/lifecycle.sh}"
 if [ -f "$LIB_LIFECYCLE" ]; then
     # shellcheck source=/dev/null
     source "$LIB_LIFECYCLE"

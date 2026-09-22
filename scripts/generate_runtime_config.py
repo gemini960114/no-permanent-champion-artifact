@@ -187,6 +187,7 @@ def reconcile_port_locks() -> bool:
                                         if result == 0:
                                             # 明確正在監聽
                                             can_remove = False
+                                            clean_ok = False
                                             print(f"⚠️  無主孤兒 Port 鎖 {dir_name} 遠端連接埠仍處於監聽狀態，暫予保留防衝突")
                                         elif result == errno.ECONNREFUSED:
                                             # 主機可達、port 明確未監聽

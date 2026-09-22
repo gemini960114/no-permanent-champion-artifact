@@ -167,6 +167,42 @@ if validate_health_response "200" "$TMP_BODY"; then
 fi
 echo "  ✅ 非 OpenAI 規格 JSON 成功攔截拒絕"
 
+# ------------------------------------------------------------------------------
+# 測試 5: Slurm Spool 環境下函式庫路徑整合 (防止 BASH_SOURCE 指向 /var/spool/slurmd)
+# ------------------------------------------------------------------------------
+echo -e "\n▶ 測試 5: 驗證 Slurm spool 環境下函式庫路徑解析 (WORK_DIR vs BASH_SOURCE)"
+
+# 5-1. 靜態檢查：確認 sglang_server.slurm 絕未依賴 BASH_SOURCE 來定位 LIB_LIFECYCLE
+if grep -E 'LIB_LIFECYCLE=.*\$SCRIPT_DIR' "$PROJECT_ROOT/sglang-qwen/sglang_server.slurm"; then
+    echo "❌ 測試 5-1 失敗：sglang_server.slurm 仍使用脆弱的 SCRIPT_DIR 定位函式庫！" >&2
+    exit 1
+fi
+if ! grep -q 'LIB_LIFECYCLE=.*\$WORK_DIR/lib/lifecycle\.sh' "$PROJECT_ROOT/sglang-qwen/sglang_server.slurm"; then
+    echo "❌ 測試 5-1 失敗：sglang_server.slurm 未正確使用 \$WORK_DIR/lib/lifecycle.sh 定位！" >&2
+    exit 1
+fi
+echo "  ✅ 靜態語法確認：LIB_LIFECYCLE 嚴格綁定 \$WORK_DIR，排除 BASH_SOURCE 陷阱"
+
+# 5-2. 動態模擬：將 sglang_server.slurm 放置於模擬的 /var/spool/slurmd 臨時目錄中執行開頭載入
+TMP_SPOOL_DIR=$(mktemp -d "/tmp/slurmd_spool.XXXXXX")
+trap 'rm -rf "$TMP_DIR" "$TMP_BODY" "$TMP_SPOOL_DIR"' EXIT
+cp "$PROJECT_ROOT/sglang-qwen/sglang_server.slurm" "$TMP_SPOOL_DIR/slurm_batch_script"
+
+RESOLVED_IN_SPOOL=$(SLURM_SUBMIT_DIR="$PROJECT_ROOT/sglang-qwen" bash -c "
+    WORK_DIR=\"\${SLURM_SUBMIT_DIR:-/path/to/work/github/litellm-proxy/sglang-qwen}\"
+    if [[ \"\$WORK_DIR\" == *\"/var/spool/slurmd\"* ]] || [ ! -w \"\$WORK_DIR\" ]; then
+        WORK_DIR=\"$PROJECT_ROOT/sglang-qwen\"
+    fi
+    LIB_LIFECYCLE=\"\${SGLANG_LIFECYCLE_LIB:-\$WORK_DIR/lib/lifecycle.sh}\"
+    echo \"\$LIB_LIFECYCLE\"
+")
+
+if [ "$RESOLVED_IN_SPOOL" != "$PROJECT_ROOT/sglang-qwen/lib/lifecycle.sh" ] || [ ! -f "$RESOLVED_IN_SPOOL" ]; then
+    echo "❌ 測試 5-2 失敗：Spool 環境下函式庫解析結果錯誤: $RESOLVED_IN_SPOOL" >&2
+    exit 1
+fi
+echo "  ✅ 動態 Spool 模擬：在任意暫存 spool 目錄下均能精準定位 $RESOLVED_IN_SPOOL"
+
 echo -e "\n=================================================================="
 echo "🎉 ALL SGLANG BASH LIFECYCLE REGRESSION TESTS PASSED!"
 echo "=================================================================="

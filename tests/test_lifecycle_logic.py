@@ -212,7 +212,7 @@ class TestPortLockReconciliation(unittest.TestCase):
             self.assertTrue(res)
             self.assertFalse(os.path.exists(lock_refused))
 
-        # 情境 B: 遠端 0 (正在監聽) -> 應保留，不刪除
+        # 情境 B: 遠端 0 (正在監聽) -> 應保留，且回傳 clean_ok=False (Fail-Closed)
         lock_listening = os.path.join(self.test_dir, "remotehost-30002")
         os.makedirs(lock_listening, exist_ok=True)
         os.utime(lock_listening, (old_time, old_time))
@@ -223,7 +223,8 @@ class TestPortLockReconciliation(unittest.TestCase):
             mock_sock.connect_ex.return_value = 0
 
             res = grc.reconcile_port_locks()
-            # 監聽中，鎖目錄保留
+            # 監聽中，鎖目錄保留且 clean_ok = False (與本機佔用行為一致)
+            self.assertFalse(res)
             self.assertTrue(os.path.exists(lock_listening))
 
         shutil.rmtree(lock_listening, ignore_errors=True)

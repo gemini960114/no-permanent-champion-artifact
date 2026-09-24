@@ -44,8 +44,8 @@ if [ ! -f ".env" ]; then
     NEW_MASTER_KEY=$(.venv/bin/python -c "import secrets; print('sk-litellm-'+secrets.token_urlsafe(32))")
     NEW_SGLANG_KEY=$(.venv/bin/python -c "import secrets; print('sk-sglang-'+secrets.token_urlsafe(24))")
     cat > .env <<EOF
-# 監聽主機 (預設 127.0.0.1 避免被區網其他用戶掃描)
-HOST=127.0.0.1
+# 監聽主機 (internal = 自動綁定本機叢集內網 IP，不綁公網 IP；跨登入節點 SSH 轉發與 OOD 代理皆可用)
+HOST=internal
 PORT=54821
 
 # LiteLLM Master Key (擁有最高管理權限)

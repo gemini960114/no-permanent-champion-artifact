@@ -27,8 +27,34 @@ if [ -f "$DIR/.env" ]; then
     set +a
 fi
 
-HOST="${HOST:-0.0.0.0}"
+HOST="${HOST:-internal}"
 PORT="${PORT:-54821}"
+NODE="$(hostname -s)"
+
+# HOST=internal：綁定本機主機名解析到的叢集內網 IP (例 login-4 → LOGIN_4_IP)，
+# 不綁公網 IP；SSH -L <節點>:<埠> 與 OOD /node/<節點>/ 皆以同一主機名解析，換節點也對得上。
+if [ "$HOST" = "internal" ]; then
+    HOST=$(getent ahostsv4 "$NODE" | awk 'NR==1 {print $1}')
+    if [ -z "$HOST" ] || [[ "$HOST" == 127.* ]]; then
+        echo "❌ 錯誤：無法解析 ${NODE} 的內網 IP (getent 結果: '${HOST}')，請在 .env 明確指定 HOST=<內網 IP>" >&2
+        exit 1
+    fi
+fi
+
+# Open OnDemand /node/ 反向代理 (與 SSH Tunnel 並存)
+# OOD 會把完整路徑 /node/<主機>/<埠>/... 原封轉給後端，SERVER_ROOT_PATHS 讓 LiteLLM
+# 同時接受「帶前綴 (OOD)」與「不帶前綴 (SSH Tunnel)」兩種請求。
+OOD_URL=""
+if [ "${ENABLE_OOD_PROXY:-false}" = "true" ]; then
+    if [[ "$HOST" == 127.* ]] || [ "$HOST" = "localhost" ]; then
+        echo "❌ 錯誤：ENABLE_OOD_PROXY=true 需要 HOST=internal（OOD 代理從 login-1/login-2 跨機連入），目前 HOST=${HOST}" >&2
+        exit 1
+    fi
+    export SERVER_ROOT_PATHS="/node/${NODE}/${PORT}"
+    OOD_URL="https://${OOD_SERVER:-nano4.nchc.org.tw}${SERVER_ROOT_PATHS}/v1"
+else
+    unset SERVER_ROOT_PATHS
+fi
 
 # 3. 檢查是否已有正在運行的實例 (支援冪等自動重啟)
 if [ -f "$PID_FILE" ]; then
@@ -67,13 +93,17 @@ fi
 
 echo "=========================================================="
 echo " 🚀 正在啟動 LiteLLM Proxy (${HOST}:${PORT})"
-echo " 🔹 執行節點 : $(hostname -s)"
+echo " 🔹 執行節點 : ${NODE}"
 echo " 🔹 設定檔   : ${CONFIG_TO_USE}"
 echo " 🔹 PID 檔案 : ${PID_FILE}"
+echo " 🔹 SSH 通道 : ssh -L 127.0.0.1:4000:${NODE}:${PORT} → http://127.0.0.1:4000/v1"
+if [ -n "$OOD_URL" ]; then
+    echo " 🔹 OOD 代理 : ${OOD_URL}（需附 OnDemand 登入 Cookie）"
+fi
 echo "=========================================================="
 
 # 記錄目前 PID 與執行節點 (exec 保留原 PID)
 echo "$$" > "$PID_FILE"
-hostname -s > "$DIR/.litellm_node"
+echo "$NODE" > "$DIR/.litellm_node"
 
 exec litellm --config "$CONFIG_TO_USE" --host "$HOST" --port "$PORT"

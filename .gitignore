@@ -14,6 +14,8 @@ config.env
 !**/config.env.example
 api_keys.json
 **/api_keys.json
+# 客戶端連線設定 (含 API Key 與 OnDemand Session Cookie)
+client/*.env
 
 # API Token、憑據檔與金鑰備份
 *token*

@@ -15,7 +15,13 @@ if [ -f "$DIR/.env" ]; then
 fi
 
 PORT="${PORT:-54821}"
-BASE_URL="http://127.0.0.1:${PORT}"
+# 與 start.sh 相同的監聽位址解析 (須在 LiteLLM 執行節點上跑)
+case "${HOST:-internal}" in
+    0.0.0.0|127.*|localhost) TARGET_IP=127.0.0.1 ;;
+    internal) TARGET_IP=$(getent ahostsv4 "$(hostname -s)" | awk 'NR==1 {print $1}') ;;
+    *) TARGET_IP="$HOST" ;;
+esac
+BASE_URL="http://${TARGET_IP}:${PORT}"
 KEY="${LITELLM_MASTER_KEY:-}"
 
 TOTAL_TESTS=0
@@ -101,6 +107,13 @@ run_test "Gateway 健康檢查 (/health)" true \
 run_test "查詢可用模型清單 (/v1/models)" true \
   -H "Authorization: Bearer ${KEY}" \
   -X GET "${BASE_URL}/v1/models"
+
+# 2b. OOD /node/ 反向代理前綴路徑 (ENABLE_OOD_PROXY=true 時)
+if [ "${ENABLE_OOD_PROXY:-false}" = "true" ]; then
+    run_test "OOD 代理前綴路徑 (/node/$(hostname -s)/${PORT}/v1/models)" true \
+      -H "Authorization: Bearer ${KEY}" \
+      -X GET "${BASE_URL}/node/$(hostname -s)/${PORT}/v1/models"
+fi
 
 # 3. SGLang Qwen3.8-27B 本地推論
 run_test "Qwen3.8-27B 本地推論 (SGLang on H200)" true \

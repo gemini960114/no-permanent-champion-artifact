@@ -109,6 +109,12 @@ if [ "$DRY_RUN" = true ]; then
     exit 0
 fi
 
+if [ -n "${SIF_PATH:-}" ] && [ ! -f "$SIF_PATH" ]; then
+    echo "❌ 錯誤：找不到容器映像檔: $SIF_PATH" >&2
+    echo "💡 請先執行 ./pull_image.sh 下載並轉換最新 SGLang 容器。" >&2
+    exit 1
+fi
+
 JOB_OUTPUT=$(sbatch "${SBATCH_ARGS[@]}" sglang_server.slurm)
 echo "✅ $JOB_OUTPUT"
 

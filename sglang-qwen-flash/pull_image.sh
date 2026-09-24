@@ -5,8 +5,14 @@
 umask 077
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/config.env" ]; then
+    chmod 600 "$SCRIPT_DIR/config.env" 2>/dev/null || true
+    source "$SCRIPT_DIR/config.env"
+fi
+
 CONTAINERS_DIR="/path/to/work/containers"
-TARGET_SIF="${CONTAINERS_DIR}/sglang_flash_latest.sif"
+TARGET_SIF="${SIF_PATH:-${CONTAINERS_DIR}/sglang_flash_latest.sif}"
 CACHE_DIR="${CONTAINERS_DIR}/apptainer_cache"
 TMP_DIR="${CONTAINERS_DIR}/apptainer_tmp"
 
@@ -31,7 +37,7 @@ if [ -z "$PULL_BIN" ]; then
     exit 1
 fi
 
-DOCKER_IMAGE="${1:-docker://lmsysorg/sglang:latest}"
+DOCKER_IMAGE="${1:-${CONTAINER_IMAGE:-docker://lmsysorg/sglang:qwen38flashnext}}"
 
 echo "=========================================================="
 echo " 🚀 開始拉取並建構支援 Qwen-Flash-Next 的 SGLang 容器"

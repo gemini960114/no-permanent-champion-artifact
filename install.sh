@@ -46,7 +46,7 @@ if [ ! -f ".env" ]; then
     cat > .env <<EOF
 # 監聽主機 (internal = 自動綁定本機叢集內網 IP，不綁公網 IP；跨登入節點 SSH 轉發與 OOD 代理皆可用)
 HOST=internal
-PORT=54821
+PORT=54921
 
 # LiteLLM Master Key (擁有最高管理權限)
 LITELLM_MASTER_KEY=${NEW_MASTER_KEY}

@@ -19,7 +19,7 @@ if [ -f "$DIR/.env" ]; then
     set +a
 fi
 
-PORT="${PORT:-54821}"
+PORT="${PORT:-54921}"
 KEY="${LITELLM_MASTER_KEY:-}"
 NODE="$(hostname -s)"
 

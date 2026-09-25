@@ -17,7 +17,7 @@
                              │
                              │  (HPC 內部高速私網 INTERNAL_CIDR)
                              ▼
-                    [LiteLLM 運行節點 (如 login-4:54821)]
+                     [LiteLLM 運行節點 (如 login-4:54921)]
                              │
                              │  (動態負載平衡 Simple-Shuffle)
                              ▼
@@ -59,7 +59,7 @@ ssh -N \
 *(輸入密碼與 OTP，保持此終端機視窗開啟)*
 
 > 💡 **關鍵設計**：
-> 由於我們在指令中明確指定了目標節點（如 `login-4:54821`），無論 `nano4.nchc.org.tw` 隨機把您的連線丟到哪一台登入節點（例如抽中 `login-1`），該節點都會透過內部私網將流量自動轉送至 `login-4`，**100% 穩定接通，徹底免除隨機抽籤連不上的問題**！
+> 由於我們在指令中明確指定了目標節點（如 `login-4:54921`），無論 `nano4.nchc.org.tw` 隨機把您的連線丟到哪一台登入節點（例如抽中 `login-1`），該節點都會透過內部私網將流量自動轉送至 `login-4`，**100% 穩定接通，徹底免除隨機抽籤連不上的問題**！
 
 ---
 
@@ -82,16 +82,23 @@ source .venv/bin/activate
 uv pip install "httpx[http2]" rich tqdm python-dotenv
 ```
 
-編輯 `.env` 確保 API Key 與端點正確：
+編輯 `.env` 確保 API Key 與端點正確（金鑰請向管理員索取，或以 `key_tool.py generate` 發放）：
 ```env
 LITELLM_BASE_URL=http://127.0.0.1:4000
-LITELLM_API_KEY=REDACTED_API_KEY
+LITELLM_API_KEY=your-litellm-api-key-here
 DEFAULT_CONCURRENCY=100
 DEFAULT_TOTAL=300
 DEFAULT_MAX_TOKENS=300
 DEFAULT_TEMPERATURE=0.7
 DEFAULT_TIMEOUT=120.0
 ```
+
+> ⚠️ **逾時設定提醒**：高併發 × 長文本（如 1000 人 × 800 tokens）實測單一請求最長延遲可達 **188 秒**，此規格請以 `--timeout 300`（或 `.env` 設 `DEFAULT_TIMEOUT=300`）執行，否則會將仍在正常生成的請求誤判為 ReadTimeout 失敗。
+
+> 💡 **測試 Flash 引擎**：預設負載模型為 27B；測 Flash 時以環境變數覆蓋：
+> ```bash
+> BENCH_MODELS="Qwen3.8-Flash,qwen3.8-flash" uv run python stress_test.py -c 1000 -n 1000 --max-tokens 800 --timeout 300
+> ```
 
 ---
 
@@ -201,3 +208,18 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
 2. **投機解碼的批次退化被排隊削減抵銷**：併發 100 時單請求解碼速度略降（驗證成本隨 batch 增加），但佇列消化速度加快，端到端延遲反而改善。
 3. **Gateway 與隧道完全不是瓶頸**：1000 人併發下 litellm 僅 5.2% CPU / 333MB，瓶頸完全在 GPU 引擎端——擴容應優先**多派引擎實例**（litellm 動態負載平衡自動分流）。
 4. **客戶端逾時設定很重要**：本規格（800 tokens、高併發）下請求最長可達 190 秒，客戶端逾時需 ≥ 300 秒，否則會誤判為服務故障（引擎實際仍正常生成）。
+
+---
+
+## 📁 歷史測試紀錄與原始數據 (`results/`)
+
+各輪壓測的完整原始 JSON 統計收錄於 [`results/`](results/)：
+
+| 檔案 | 測試情境 | 引擎 / 通道 | 關鍵結果 |
+| :--- | :--- | :--- | :--- |
+| `bench_result_500_users.json` | 500 人 × 300 tokens | Flash 單實例（併發上限 48）／VM 反向隧道 | 100% 成功、平均 1,478 tok/s、P95 91.4 秒 |
+| `bench_result_1000_users_mrr48.json` | 1000 人 × 800 tokens | 同上 | 100% 成功、平均 2,153 tok/s、峰值 4,463 tok/s |
+| `bench_result_1000_users_mrr100.json` | 1000 人 × 800 tokens | Flash 單實例（`MAX_RUNNING_REQUESTS=100`）／VM 反向隧道 | 100% 成功、平均 2,774 tok/s、峰值 6,221 tok/s |
+| `bench_result_1000_users_mrr100_client_timeout120.json` | 同上但客戶端逾時 120 秒 | 同上 | **56.2% 成功**——失敗全為 ReadTimeout，作為「逾時設定不足」的對照紀錄 |
+
+> 測試日期：2026-09-25。當時部署：Gateway @ `login-4:54921`、引擎 Slurm Job @ `node-C`（4×H200）。

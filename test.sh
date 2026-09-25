@@ -14,7 +14,7 @@ if [ -f "$DIR/.env" ]; then
     set +a
 fi
 
-PORT="${PORT:-54821}"
+PORT="${PORT:-54921}"
 # 與 start.sh 相同的監聽位址解析 (須在 LiteLLM 執行節點上跑)
 case "${HOST:-internal}" in
     0.0.0.0|127.*|localhost) TARGET_IP=127.0.0.1 ;;

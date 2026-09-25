@@ -10,7 +10,7 @@ if [ -f "$DIR/.env" ]; then
     set +a
 fi
 
-PORT="${PORT:-54821}"
+PORT="${PORT:-54921}"
 CURRENT_USER="$(whoami)"
 
 # 節點檢查：PID 為節點區域 (node-local)，若 LiteLLM 記錄於其他節點，本機 stop 無效

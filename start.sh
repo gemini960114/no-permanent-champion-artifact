@@ -28,7 +28,7 @@ if [ -f "$DIR/.env" ]; then
 fi
 
 HOST="${HOST:-internal}"
-PORT="${PORT:-54821}"
+PORT="${PORT:-54921}"
 NODE="$(hostname -s)"
 
 # HOST=internal：綁定本機主機名解析到的叢集內網 IP (例 login-4 → LOGIN_4_IP)，

@@ -39,14 +39,16 @@ except ImportError:
 
 # 測試預設設定 (優先讀取環境變數 / .env)
 DEFAULT_BASE_URL = os.getenv("LITELLM_BASE_URL", os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:4000"))
-DEFAULT_API_KEY = os.getenv("LITELLM_API_KEY", os.getenv("OPENAI_API_KEY", "REDACTED_API_KEY"))
+DEFAULT_API_KEY = os.getenv("LITELLM_API_KEY", os.getenv("OPENAI_API_KEY", ""))
 DEFAULT_CONCURRENCY = int(os.getenv("DEFAULT_CONCURRENCY", "100"))
 DEFAULT_TOTAL = int(os.getenv("DEFAULT_TOTAL", "300"))
 DEFAULT_MAX_TOKENS = int(os.getenv("DEFAULT_MAX_TOKENS", "300"))
 DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
 DEFAULT_TIMEOUT = float(os.getenv("DEFAULT_TIMEOUT", "120.0"))
 
-MODELS = ["Qwen3.8-27B", "qwen3.8"]
+# 負載模型（逗號分隔，可由環境變數 BENCH_MODELS 覆蓋；例如測 Flash 引擎：
+# BENCH_MODELS="Qwen3.8-Flash,qwen3.8-flash"）
+MODELS = [m.strip() for m in os.getenv("BENCH_MODELS", "Qwen3.8-27B,qwen3.8").split(",") if m.strip()]
 
 TEST_PROMPTS = [
     "請簡要說明分散式系統中的 Paxos 與 Raft 演算法的核心差異。",
@@ -87,6 +89,10 @@ async def check_connection(client: httpx.AsyncClient, root_url: str, v1_url: str
     """
     console.print(Panel.fit("[bold cyan]🔍 步驟 1: 正在執行連線健康檢查 (Pre-flight Check)...[/bold cyan]", border_style="cyan"))
 
+    if not api_key:
+        console.print("[bold red]❌ 未設定 API Key：請以 --api-key、環境變數 LITELLM_API_KEY 或 .env（見 .env.example）設定[/bold red]")
+        return False
+
     headers = {"Authorization": f"Bearer {api_key}"}
 
     # 1. 檢查 /health
@@ -99,7 +105,7 @@ async def check_connection(client: httpx.AsyncClient, root_url: str, v1_url: str
         console.print(f"  [green]✅ Gateway 健康檢查通過[/green] ([dim]{health_url}[/dim] HTTP 200)")
     except Exception as e:
         console.print(f"[bold red]❌ 連線至 /health 失敗:[/bold red] {format_error(e)}")
-        console.print("[yellow]💡 請確認 SSH Tunnel 是否正常建立 (例如: 127.0.0.1:4000 -> 遠端 54821) 且遠端服務已啟動！[/yellow]")
+        console.print("[yellow]💡 請確認 SSH Tunnel 是否正常建立 (例如: 127.0.0.1:4000 -> 遠端 54921) 且遠端服務已啟動！[/yellow]")
         return False
 
     # 2. 檢查 /v1/models

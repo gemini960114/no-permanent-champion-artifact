@@ -71,6 +71,16 @@ else
     fail "行程不存在 (PID 檔: ${PID:-無})，請執行 ./start.sh"
 fi
 
+# 2.5 外部 VM 反向隧道資訊（若曾以 ~/start-litellm-tunnel.sh 啟動）
+TUNNEL_INFO="$HOME/.litellm-tunnel.info"
+if [ -f "$TUNNEL_INFO" ]; then
+    T_NODE=$(sed -n 's/^node=//p' "$TUNNEL_INFO" 2>/dev/null)
+    T_PID=$(sed -n 's/^autossh_pid=//p' "$TUNNEL_INFO" 2>/dev/null)
+    if [ -n "$T_NODE" ]; then
+        echo "ℹ️  反向隧道運行於 ${T_NODE} (autossh PID: ${T_PID:-未知})；停止：ssh ${T_NODE} 後執行 ~/stop-litellm-tunnel.sh"
+    fi
+fi
+
 # 3. 監聽位址 (不應綁公網)
 LISTEN=$(ss -ltnH "sport = :${PORT}" 2>/dev/null | awk '{print $4}' | sort -u | tr '\n' ' ')
 if [ -z "$LISTEN" ]; then

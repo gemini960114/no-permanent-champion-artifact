@@ -13,6 +13,16 @@ fi
 PORT="${PORT:-54821}"
 CURRENT_USER="$(whoami)"
 
+# 節點檢查：PID 為節點區域 (node-local)，若 LiteLLM 記錄於其他節點，本機 stop 無效
+RECORDED_NODE=$(cat "$DIR/.litellm_node" 2>/dev/null || echo "")
+CURRENT_NODE=$(hostname -s)
+if [ -n "$RECORDED_NODE" ] && [ "$RECORDED_NODE" != "$CURRENT_NODE" ]; then
+    echo "❌ 錯誤：LiteLLM 記錄於 ${RECORDED_NODE} 執行 (PID: $(cat "$PID_FILE" 2>/dev/null || echo '無'))，本機為 ${CURRENT_NODE}。" >&2
+    echo "    PID 是節點區域的——請先 ssh ${RECORDED_NODE} 再執行 ./stop.sh" >&2
+    echo "    （若記錄已過時、該節點已無服務，可手動刪除 .litellm.pid 與 .litellm_node 後重試）" >&2
+    exit 1
+fi
+
 echo "=========================================================="
 echo " 🛑 準備停止 LiteLLM Proxy (Port: $PORT)"
 echo "=========================================================="

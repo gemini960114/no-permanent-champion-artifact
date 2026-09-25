@@ -68,26 +68,72 @@ if [ -f "$PID_FILE" ]; then
     fi
 fi
 
-# 4. 動態合成最新 Runtime 設定檔 (嚴格 Fail-Closed，禁止沿用失敗之舊設定)
+# 4. 載入各引擎鑑權金鑰 (供 Runtime 設定生成探測與 litellm 執行期 os.environ/XXX 解析使用)
+#    .env 既有值優先；未設定者自各引擎目錄 config.env 自動收集 (sglang-* / vllm-*，symlink 去重)
+load_engine_api_keys() {
+    local key_var cfg val ep_file d real
+    # 收集端點檔實際引用之 API_KEY_ENV 變數名稱 (另固定納入 SGLANG_API_KEY / VLLM_API_KEY)
+    local key_vars="SGLANG_API_KEY VLLM_API_KEY"
+    for ep_file in "$DIR"/runtime/endpoints/*.env; do
+        [ -e "$ep_file" ] || continue
+        key_var=$(grep -m1 '^API_KEY_ENV=' "$ep_file" | cut -d'=' -f2 | tr -d '\r\n')
+        if [ -n "$key_var" ] && [[ " $key_vars " != *" $key_var "* ]]; then
+            key_vars="$key_vars $key_var"
+        fi
+    done
+    # 收集引擎目錄 (以 readlink -f 對 symlink 去重)
+    local engine_dirs=() seen=""
+    for d in "$DIR"/sglang-* "$DIR"/vllm-*; do
+        [ -d "$d" ] || continue
+        real=$(readlink -f "$d" 2>/dev/null || echo "$d")
+        [[ " $seen " == *" $real "* ]] && continue
+        seen="$seen $real"
+        engine_dirs+=("$d")
+    done
+    # 依序查找：環境變數 (含 .env 載入值) 已有者優先，其次各引擎 config.env
+    # (僅輸出變數名稱與配置狀態，絕不印出金鑰值)
+    for key_var in $key_vars; do
+        if [ -n "${!key_var:-}" ]; then
+            continue
+        fi
+        for d in "${engine_dirs[@]}"; do
+            cfg="$d/config.env"
+            [ -f "$cfg" ] || continue
+            val=$(grep -m1 "^${key_var}=" "$cfg" | cut -d'=' -f2- | tr -d '\r\n')
+            # 去除成對包覆之引號 (注意：雙引號內必須寫 \'，裸 ' 會被視為空 pattern 而無法去除)
+            val="${val#\"}"
+            val="${val%\"}"
+            val="${val#\'}"
+            val="${val%\'}"
+            if [ -n "$val" ]; then
+                export "$key_var=$val"
+                echo "🔹 動態載入 ${key_var} : [已配置]"
+                break
+            fi
+        done
+    done
+    return 0
+}
+load_engine_api_keys
+
+# 5. 動態合成最新 Runtime 設定檔 (嚴格 Fail-Closed，禁止沿用失敗之舊設定)
+#    generator 回傳碼：0 = 全部成功；2 = 部分成功 (Slurm UNKNOWN 端點略過)；
+#    僅 2 允許帶警告繼續啟動，其餘非 0 一律中止
 CONFIG_TO_USE="$DIR/config.yaml"
 if [ -f "$DIR/scripts/generate_runtime_config.py" ]; then
     echo "🔹 執行端點探測與 Runtime 設定生成..."
-    if python3 "$DIR/scripts/generate_runtime_config.py"; then
+    GEN_RC=0
+    python3 "$DIR/scripts/generate_runtime_config.py" || GEN_RC=$?
+    if [ "$GEN_RC" -eq 0 ] || [ "$GEN_RC" -eq 2 ]; then
         if [ -f "$DIR/config.runtime.yaml" ]; then
             CONFIG_TO_USE="$DIR/config.runtime.yaml"
+        fi
+        if [ "$GEN_RC" -eq 2 ]; then
+            echo "⚠️  警告：Runtime 設定生成僅部分成功 (Slurm 狀態查詢異常，已略過狀態未知之端點)，以現有可用端點繼續啟動！" >&2
         fi
     else
         echo "❌ 錯誤：Runtime 設定檔生成失敗，終止啟動以策安全！" >&2
         exit 1
-    fi
-fi
-
-# 若 SGLang API Key 尚未由 .env 載入，自 sglang-qwen/config.env 同步
-if [ -z "${SGLANG_API_KEY:-}" ] && [ -f "$DIR/sglang-qwen/config.env" ]; then
-    DETECTED_SGLANG_KEY=$(grep "^SGLANG_API_KEY=" "$DIR/sglang-qwen/config.env" | cut -d'=' -f2 | tr -d '\r\n')
-    if [ -n "$DETECTED_SGLANG_KEY" ]; then
-        export SGLANG_API_KEY="$DETECTED_SGLANG_KEY"
-        echo "🔹 動態載入 SGLang 金鑰 : [已配置]"
     fi
 fi
 

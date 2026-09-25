@@ -1,5 +1,8 @@
 # Plan Update：每日模型啟停與 LiteLLM 設定更新
 
+> [!WARNING]
+> ⚠️ **此為階段歷史記錄，現行行為以 [HPC_LITELLM_GATEWAY_ARCHITECTURE.md](./HPC_LITELLM_GATEWAY_ARCHITECTURE.md) 為準。**
+
 > [!NOTE]
 > **文件狀態：Phase 1A（Endpoint Registry、Port 原子鎖、三態對帳合成與雙向清理機制）已實作並完成實體驗收（經同節點雙 Job 418623/418624 現場實測通過）。**  
 > 更新日期：2026-09-22  

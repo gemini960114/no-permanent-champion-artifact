@@ -14,6 +14,10 @@ config.env
 !**/config.env.example
 api_keys.json
 **/api_keys.json
+api_keys.json.lock
+**/api_keys.json.lock
+api_keys.json.tmp.*
+**/api_keys.json.tmp.*
 # 客戶端連線設定 (含 API Key 與 OnDemand Session Cookie)
 client/*.env
 

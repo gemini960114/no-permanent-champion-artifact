@@ -9,6 +9,8 @@ LiteLLM Gateway & SGLang 生命週期核心邏輯單元測試庫
 3. 連線逾時與控制器通訊故障之 Fail-Closed 安全防護
 4. Port 鎖對帳：安全清除 INACTIVE、嚴格保留 UNKNOWN、回收 >10 分鐘孤兒鎖
 5. HTTP 探測：HTTP 200 狀態碼與 OpenAI JSON 結構之雙重嚴格校驗
+6. 引擎金鑰嚴格歸屬查找 (API_KEY_ENV + ENGINE_DIR，絕不跨引擎退回)
+7. Generator 主流程：manual 端點保留、UNKNOWN exit 2 部分成功、靜態過濾不依名稱
 ==============================================================================
 """
 
@@ -24,6 +26,7 @@ import http.server
 import threading
 import errno
 import socket
+import yaml
 from unittest.mock import patch, MagicMock
 
 # 載入受測模組
@@ -325,6 +328,257 @@ class TestEndpointHttpJsonValidation(unittest.TestCase):
 
         # 5. 連線不存在 Port
         self.assertFalse(grc.is_endpoint_alive("http://127.0.0.1:59999/v1", ""))
+
+class TestEngineApiKeyLookup(unittest.TestCase):
+    """測試 get_engine_api_key 之嚴格歸屬查找 (環境變數優先、絕不跨引擎退回)"""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.sglang_dir = os.path.join(self.test_dir, "sglang-fake")
+        self.vllm_dir = os.path.join(self.test_dir, "vllm-fake")
+        os.makedirs(self.sglang_dir)
+        os.makedirs(self.vllm_dir)
+        # 測試用假金鑰 (非真實秘密)
+        with open(os.path.join(self.sglang_dir, "config.env"), "w", encoding="utf-8") as f:
+            f.write("SGLANG_API_KEY=fake-sglang-key-000\n")
+        with open(os.path.join(self.vllm_dir, "config.env"), "w", encoding="utf-8") as f:
+            f.write("VLLM_API_KEY=fake-vllm-key-111\n")
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def _clean_key_env(self):
+        # 移除可能存在之真實環境金鑰變數，確保測試隔離
+        for k in ("SGLANG_API_KEY", "VLLM_API_KEY"):
+            os.environ.pop(k, None)
+
+    def test_env_variable_takes_priority(self):
+        """環境變數 (含 .env 載入值) 優先於引擎 config.env"""
+        with patch.dict(os.environ):
+            self._clean_key_env()
+            os.environ["VLLM_API_KEY"] = "fake-env-key-222"
+            self.assertEqual(grc.get_engine_api_key("VLLM_API_KEY", self.vllm_dir), "fake-env-key-222")
+
+    def test_engine_dir_strict_lookup_no_cross_engine_fallback(self):
+        """指定引擎目錄時嚴格讀取該目錄 config.env，找不到回空字串、絕不退回其他引擎金鑰"""
+        with patch.dict(os.environ):
+            self._clean_key_env()
+            # 指定 vllm 目錄 → 取得 vllm 金鑰
+            self.assertEqual(grc.get_engine_api_key("VLLM_API_KEY", self.vllm_dir), "fake-vllm-key-111")
+            # 指定 sglang 目錄查找 VLLM_API_KEY → 嚴格回空 (不得退回 sglang 金鑰)
+            self.assertEqual(grc.get_engine_api_key("VLLM_API_KEY", self.sglang_dir), "")
+            self.assertEqual(grc.get_engine_api_key("SGLANG_API_KEY", self.vllm_dir), "")
+
+    def test_legacy_scan_without_engine_dir_and_symlink_dedup(self):
+        """legacy 端點檔無 ENGINE_DIR 時掃描各引擎目錄，且 symlink 去重"""
+        with patch.dict(os.environ):
+            self._clean_key_env()
+            with patch.object(grc, "PROJECT_ROOT", self.test_dir):
+                self.assertEqual(grc.get_engine_api_key("VLLM_API_KEY"), "fake-vllm-key-111")
+                self.assertEqual(grc.get_engine_api_key("SGLANG_API_KEY"), "fake-sglang-key-000")
+                self.assertEqual(grc.get_engine_api_key("NOT_EXIST_KEY_XYZ"), "")
+                # 建立 symlink 指向 sglang-fake，掃描結果不得重複
+                link = os.path.join(self.test_dir, "sglang-link")
+                os.symlink(self.sglang_dir, link)
+                try:
+                    dirs = grc.get_engine_dirs()
+                    reals = [os.path.realpath(d) for d in dirs]
+                    self.assertEqual(len(reals), len(set(reals)), "symlink 未正確去重！")
+                    self.assertEqual(len(reals), 2)
+                finally:
+                    os.remove(link)
+
+
+class TestGeneratorMainFlow(unittest.TestCase):
+    """以假引擎 config.env 與假 HTTP 端點整合測試 generator 主流程 (金鑰一律假值)"""
+
+    EXPECTED_TOKEN = "fake-vllm-key-111"  # 測試用假金鑰 (非真實秘密)
+
+    TEMPLATE_YAML = """model_list:
+  - model_name: GLM-Test
+    litellm_params:
+      model: openai/GLM-Test
+      api_base: https://portal.example.test/api/v1
+      api_key: os.environ/NCHC_FAKE_TEST_KEY
+  - model_name: Qwen-Portal-Future
+    litellm_params:
+      model: openai/Qwen-Portal-Future
+      api_base: https://portal.example.test/api/v1
+      api_key: os.environ/NCHC_FAKE_TEST_KEY
+  - model_name: internal-qwen
+    litellm_params:
+      model: openai/internal-qwen
+      api_base: os.environ/SGLANG_API_BASE
+      api_key: os.environ/SGLANG_API_KEY
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+"""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+
+        # 1. 假引擎目錄 (vllm 含正確假金鑰；sglang 僅含 SGLang 假金鑰)
+        self.vllm_dir = os.path.join(self.test_dir, "vllm-fake")
+        self.sglang_dir = os.path.join(self.test_dir, "sglang-fake")
+        os.makedirs(self.vllm_dir)
+        os.makedirs(self.sglang_dir)
+        with open(os.path.join(self.vllm_dir, "config.env"), "w", encoding="utf-8") as f:
+            f.write(f"VLLM_API_KEY={self.EXPECTED_TOKEN}\n")
+        with open(os.path.join(self.sglang_dir, "config.env"), "w", encoding="utf-8") as f:
+            f.write("SGLANG_API_KEY=fake-sglang-key-000\n")
+
+        # 2. 假 HTTP 推論端點：僅接受正確 Bearer 假金鑰，其餘回 401
+        server_token = self.EXPECTED_TOKEN
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.headers.get("Authorization", "") == f"Bearer {server_token}":
+                    body = b'{"object": "list", "data": [{"id": "DeepSeek-V4-Flash"}]}'
+                    self.send_response(200)
+                else:
+                    body = b'{"object": "error", "message": "Unauthorized"}'
+                    self.send_response(401)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):
+                pass
+
+        self.httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        self.server_port = self.httpd.server_port
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+        # 3. 假範本設定檔
+        self.template_path = os.path.join(self.test_dir, "config.template.yaml")
+        with open(self.template_path, "w", encoding="utf-8") as f:
+            f.write(self.TEMPLATE_YAML)
+
+        # 4. 將 generator 路徑常數導向暫存目錄
+        self._orig_paths = (grc.TEMPLATE_CONFIG_PATH, grc.RUNTIME_CONFIG_PATH,
+                            grc.ENDPOINTS_DIR, grc.PORT_LOCKS_DIR, grc.PROJECT_ROOT)
+        grc.TEMPLATE_CONFIG_PATH = self.template_path
+        grc.RUNTIME_CONFIG_PATH = os.path.join(self.test_dir, "config.runtime.yaml")
+        grc.ENDPOINTS_DIR = os.path.join(self.test_dir, "endpoints")
+        grc.PORT_LOCKS_DIR = os.path.join(self.test_dir, "port-locks")
+        grc.PROJECT_ROOT = self.test_dir
+        os.makedirs(grc.ENDPOINTS_DIR, exist_ok=True)
+        os.makedirs(grc.PORT_LOCKS_DIR, exist_ok=True)
+
+        # 5. 隔離環境：移除可能存在之真實金鑰變數
+        self._env_patch = patch.dict(os.environ)
+        self._env_patch.start()
+        for k in ("SGLANG_API_KEY", "VLLM_API_KEY"):
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        self._env_patch.stop()
+        (grc.TEMPLATE_CONFIG_PATH, grc.RUNTIME_CONFIG_PATH,
+         grc.ENDPOINTS_DIR, grc.PORT_LOCKS_DIR, grc.PROJECT_ROOT) = self._orig_paths
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def _write_endpoint(self, filename, **overrides):
+        fields = {
+            "MODEL_NAME": "DeepSeek-V4-Flash",
+            "MODEL_ALIAS": "deepseek-flash",
+            "RESOLVED_MODEL_PATH": "/work/fake/models/DeepSeek-V4.1-Flash",
+            "API_KEY_ENV": "VLLM_API_KEY",
+            "ENGINE_DIR": self.vllm_dir,
+            "NODE_HOSTNAME": "127.0.0.1",
+            "NODE_IP": "127.0.0.1",
+            "PORT": str(self.server_port),
+            "ENDPOINT": f"http://127.0.0.1:{self.server_port}",
+            "API_BASE": f"http://127.0.0.1:{self.server_port}/v1",
+            "SLURM_JOB_ID": "12345",
+            "STATE": "ready",
+        }
+        fields.update(overrides)
+        path = os.path.join(grc.ENDPOINTS_DIR, filename)
+        with open(path, "w", encoding="utf-8") as f:
+            for k, v in fields.items():
+                f.write(f"{k}={v}\n")
+        return path
+
+    def _runtime_model_names(self):
+        with open(grc.RUNTIME_CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return [m["model_name"] for m in cfg["model_list"]]
+
+    @patch("generate_runtime_config.get_job_status", return_value="RUNNING")
+    def test_correct_engine_key_registers_endpoint(self, _mock):
+        """API_KEY_ENV + ENGINE_DIR 取得正確引擎金鑰 → 探測通過 → 端點註冊"""
+        self._write_endpoint("vllm_deepseek_12345.env")
+        grc.main()
+        names = self._runtime_model_names()
+        self.assertIn("GLM-Test", names)               # 靜態模型保留
+        self.assertIn("DeepSeek-V4-Flash", names)      # 動態端點註冊成功
+        # api_key 必須維持 os.environ/XXX 引用，絕不寫入明文金鑰
+        with open(grc.RUNTIME_CONFIG_PATH, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.assertNotIn(self.EXPECTED_TOKEN, content)
+        self.assertIn("os.environ/VLLM_API_KEY", content)
+
+    @patch("generate_runtime_config.get_job_status", return_value="RUNNING")
+    def test_no_fallback_to_other_engine_key(self, _mock):
+        """ENGINE_DIR 所屬引擎無 API_KEY_ENV 指定之金鑰 → 探測不得攜帶其他引擎金鑰"""
+        ep = self._write_endpoint("vllm_deepseek_12345.env", ENGINE_DIR=self.sglang_dir)
+        with patch("generate_runtime_config.is_endpoint_alive",
+                   side_effect=grc.is_endpoint_alive) as spy:
+            grc.main()
+        spy.assert_called_once()
+        used_key = spy.call_args[0][1]
+        self.assertEqual(used_key, "", "探測金鑰應為空，不得退回其他引擎 (SGLang) 之金鑰！")
+        self.assertNotIn("DeepSeek-V4-Flash", self._runtime_model_names())
+        self.assertTrue(os.path.exists(ep), "探測失敗之端點檔不應被刪除 (僅 INACTIVE 才清理)")
+
+    def test_manual_endpoint_not_deleted_and_no_squeue(self):
+        """manual 端點：不做 squeue 判定、不刪檔，HTTP 探測通過即納入"""
+        ep = self._write_endpoint("vllm_deepseek_manual.env", SLURM_JOB_ID="manual")
+        with patch("subprocess.run", side_effect=AssertionError("manual 端點不應呼叫 squeue")):
+            grc.main()
+        self.assertTrue(os.path.exists(ep), "manual 端點檔不應被刪除！")
+        self.assertIn("DeepSeek-V4-Flash", self._runtime_model_names())
+
+    def test_manual_endpoint_unreachable_keeps_file(self):
+        """manual 端點連不上：檔案保留、不納入設定 (Fail-Closed)"""
+        ep = self._write_endpoint(
+            "vllm_deepseek_manual2.env", SLURM_JOB_ID="manual",
+            PORT="59999", ENDPOINT="http://127.0.0.1:59999", API_BASE="http://127.0.0.1:59999/v1",
+        )
+        grc.main()
+        self.assertTrue(os.path.exists(ep))
+        self.assertNotIn("DeepSeek-V4-Flash", self._runtime_model_names())
+
+    def test_na_legacy_endpoint_deleted(self):
+        """legacy N/A 端點維持舊行為：判定 INACTIVE 並清理"""
+        ep = self._write_endpoint("vllm_deepseek_na.env", SLURM_JOB_ID="N/A")
+        grc.main()
+        self.assertFalse(os.path.exists(ep), "legacy N/A 端點應被清理")
+
+    @patch("generate_runtime_config.get_job_status", return_value="UNKNOWN")
+    def test_unknown_exit2_and_partial_config_written(self, _mock):
+        """UNKNOWN：exit 2 (部分成功)、端點檔保留、仍寫出靜態模型設定"""
+        ep = self._write_endpoint("vllm_deepseek_12345.env", SLURM_JOB_ID="12345")
+        with self.assertRaises(SystemExit) as ctx:
+            grc.main()
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertTrue(os.path.exists(grc.RUNTIME_CONFIG_PATH), "UNKNOWN 時仍應寫出部分成功之設定檔")
+        names = self._runtime_model_names()
+        self.assertIn("GLM-Test", names)
+        self.assertNotIn("DeepSeek-V4-Flash", names)
+        self.assertTrue(os.path.exists(ep), "UNKNOWN 端點檔不應被刪除")
+
+    def test_static_filter_by_api_base_not_name(self):
+        """靜態過濾僅依 api_base 規則：名稱含 qwen 之 Portal 模型保留、os.environ 佔位者排除"""
+        grc.main()
+        names = self._runtime_model_names()
+        self.assertIn("Qwen-Portal-Future", names, "名稱比對已移除，Portal Qwen 模型不應被誤刪")
+        self.assertIn("GLM-Test", names)
+        self.assertNotIn("internal-qwen", names, "os.environ 佔位 api_base 仍應交由動態端點取代")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

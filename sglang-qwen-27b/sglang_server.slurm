@@ -19,7 +19,7 @@ set -eo pipefail
 # 1. 確保工作目錄 (SLURM 計算節點上 BASH_SOURCE 會指向 /var/spool/slurmd，故優先採用 SLURM_SUBMIT_DIR)
 WORK_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 if [[ "$WORK_DIR" == *"/var/spool/slurmd"* ]] || [ ! -w "$WORK_DIR" ]; then
-    WORK_DIR="/path/to/work/github/litellm-proxy/sglang-qwen"
+    WORK_DIR="/path/to/work/github/litellm-proxy/sglang-qwen-27b"
 fi
 cd "$WORK_DIR"
 mkdir -p -m 700 logs
@@ -133,15 +133,17 @@ echo "=================================================================="
 # 1. 初始發布狀態為 starting (此狀態下合成器嚴格忽略，不上線)
 publish_endpoint "starting"
 
-# 2. 背景非同步自檢健康檢查：嚴格要求 HTTP 200 與合法 JSON 回應才標記 ready
+# 2. 背景非同步自檢健康檢查：嚴格要求 HTTP 200 與合法 JSON 回應才標記 ready；
+#    逾時 (HEALTH_TIMEOUT 秒，預設 600) 未就緒則主動終止服務釋放 GPU 資源
 (
     AUTH_HEADER=()
     if [ -n "${SGLANG_API_KEY:-}" ]; then
         AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
     fi
+    HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-600}"
     TMP_BODY=$(mktemp)
     trap 'rm -f "$TMP_BODY"' EXIT
-    for i in $(seq 1 300); do
+    for i in $(seq 1 $(( HEALTH_TIMEOUT / 2 ))); do
         sleep 2
         HTTP_CODE=$(curl -sS -m 4 -o "$TMP_BODY" -w "%{http_code}" "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || echo "000")
         if validate_health_response "$HTTP_CODE" "$TMP_BODY"; then
@@ -152,7 +154,15 @@ publish_endpoint "starting"
         fi
     done
     rm -f "$TMP_BODY"
-    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢逾時未就緒 (Port $PORT)" >&2
+    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang 健康自檢逾時未就緒 (Port $PORT，逾時 ${HEALTH_TIMEOUT} 秒)，主動終止服務釋放 GPU 資源" >&2
+    # SERVER_PID 於本子殼啟動後才設定，子殼內拿不到；$$ 在子殼內即為主 shell 之 PID，
+    # 對其送 TERM 可靠觸發 cleanup_endpoint trap (清理端點檔與 Port 鎖)
+    if [ -n "${SLURM_JOB_ID:-}" ]; then
+        scancel "${SLURM_JOB_ID}" 2>/dev/null || kill -TERM "$$" 2>/dev/null || true
+    else
+        kill -TERM "$$" 2>/dev/null || true
+    fi
+    exit 1
 ) &
 HEALTH_PID=$!
 

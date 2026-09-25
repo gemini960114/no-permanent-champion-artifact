@@ -46,8 +46,17 @@ if [ -n "$MATCHED_PIDS" ]; then
     for PID in $MATCHED_PIDS; do
         echo "🔹 停止當前使用者名下殘存的 LiteLLM 進程 (PID: $PID)..."
         kill -TERM "$PID" 2>/dev/null || true
-        sleep 0.5
-        kill -9 "$PID" 2>/dev/null || true
+        # 與方法 1 相同之優雅終止：最多等待 5 秒再送 SIGKILL
+        for _ in {1..10}; do
+            if ! kill -0 "$PID" 2>/dev/null; then
+                break
+            fi
+            sleep 0.5
+        done
+        if kill -0 "$PID" 2>/dev/null; then
+            echo "⚠️  進程未能在時限內關閉，發送強制終止 (SIGKILL)..."
+            kill -9 "$PID" 2>/dev/null || true
+        fi
         STOPPED=true
     done
 fi

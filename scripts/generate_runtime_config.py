@@ -9,12 +9,19 @@ LiteLLM Runtime 設定動態產生器 (Morning Controller Core) - 工業級加�
 3. 嚴格審查：
    - 狀態必須為 STATE=ready (未就緒一律排除)
    - 透過 squeue 驗證狀態必須為 RUNNING (排除 PENDING / COMPLETING / 已終止)
+     (manual 端點不做 squeue 判定，僅依 STATE=ready + HTTP 探測)
    - 登入節點主動向 API_BASE/models 進行 HTTP 200 探測 (防假性宣告)
+   - 探測金鑰依 API_KEY_ENV + ENGINE_DIR 從「環境變數 → 所屬引擎 config.env」
+     嚴格查找，絕不退回其他引擎之金鑰
 4. 自動對帳 (Reconciliation)：
    - 主動清理已終止 Job 之過期端點檔與 runtime/port-locks/ 佔用鎖
 5. 支援多實例負載平衡：同名模型多端點自動多重註冊至 LiteLLM Router
 6. 徹底移除危險的 legacy fallback，落實 Fail-Closed 安全原則
 7. 以 600 權限原子寫入 config.runtime.yaml
+回傳碼：
+   0 = 全部成功
+   2 = 部分成功 (存在 Slurm 狀態 UNKNOWN 之端點，已略過但仍寫出可用設定)
+   1 = 失敗 (範本遺失等，未寫出設定)
 ==============================================================================
 """
 
@@ -35,24 +42,63 @@ TEMPLATE_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.yaml")
 RUNTIME_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.runtime.yaml")
 ENDPOINTS_DIR = os.path.join(PROJECT_ROOT, "runtime", "endpoints")
 PORT_LOCKS_DIR = os.path.join(PROJECT_ROOT, "runtime", "port-locks")
-SGLANG_CONFIG_ENV = os.path.join(PROJECT_ROOT, "sglang-qwen", "config.env")
 
-def get_sglang_api_key() -> str:
-    """取得 SGLang 後端鑑權金鑰 (優先讀取環境變數，次自 config.env 載入)"""
-    key = os.environ.get("SGLANG_API_KEY", "")
-    if not key and os.path.isfile(SGLANG_CONFIG_ENV):
-        with open(SGLANG_CONFIG_ENV, "r", encoding="utf-8") as f:
+def get_engine_dirs() -> list:
+    """掃描專案下所有引擎目錄 (sglang-* / vllm-*)，以 realpath 對 symlink 去重"""
+    dirs = []
+    seen = set()
+    for pattern in ("sglang-*", "vllm-*"):
+        for d in sorted(glob.glob(os.path.join(PROJECT_ROOT, pattern))):
+            if not os.path.isdir(d):
+                continue
+            real = os.path.realpath(d)
+            if real in seen:
+                continue
+            seen.add(real)
+            dirs.append(d)
+    return dirs
+
+def read_config_env_var(config_path: str, var_name: str) -> str:
+    """自指定 config.env 讀取單一變數值 (無此檔或無此變數回傳空字串，絕不外印)"""
+    if not var_name or not os.path.isfile(config_path):
+        return ""
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
             for line in f:
-                if line.startswith("SGLANG_API_KEY="):
-                    key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    break
-    return key
+                if line.startswith(f"{var_name}="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return ""
+
+def get_engine_api_key(key_name: str, engine_dir: str = "") -> str:
+    """
+    取得推論引擎鑑權金鑰 (嚴格依歸屬查找，絕不退回其他引擎之金鑰)：
+    1. 環境變數優先 (含 .env 載入值)
+    2. 指定 engine_dir 時：僅讀取該引擎目錄之 config.env
+    3. 未指定 engine_dir (legacy 端點檔無 ENGINE_DIR)：掃描各引擎目錄 (symlink 去重)
+    找不到回傳空字串 (Fail-Closed，探測將失敗並略過該端點)
+    """
+    if not key_name:
+        return ""
+    key = os.environ.get(key_name, "")
+    if key:
+        return key
+    if engine_dir:
+        return read_config_env_var(os.path.join(engine_dir, "config.env"), key_name)
+    for d in get_engine_dirs():
+        key = read_config_env_var(os.path.join(d, "config.env"), key_name)
+        if key:
+            return key
+    return ""
 
 def get_job_status(job_id: str) -> str:
     """
     透過 squeue 檢查 Slurm Job 狀態，嚴格回傳三態：
-    - 'RUNNING'  : 作業正常運行中
-    - 'INACTIVE' : 作業已明確終止 (squeue 終止狀態碼，或明確回報 Invalid job id specified)
+    - 'RUNNING'  : 作業正常運行中 (manual 端點不做 squeue 判定，直接視為運行中，
+                   僅依 STATE=ready + HTTP 探測決定納入與否)
+    - 'INACTIVE' : 作業已明確終止 (squeue 終止狀態碼，或明確回報 Invalid job id specified)；
+                   legacy 端點檔之 'N/A' 亦沿用此行為 (允許清理)
     - 'UNKNOWN'  : squeue 逾時、連線異常或無法與 controller 通訊 (Fail-Closed 保留)
     """
     if not job_id or str(job_id) in ("N/A", "dummy"):
@@ -232,20 +278,18 @@ def main():
         config = yaml.safe_load(f) or {}
 
     # 保留靜態模型 (如 NCHC GenAI Portal 外部模型，排除本機環境變數佔位符)
+    # 內部模型一律由動態端點註冊取代，僅依 api_base 是否為 os.environ 佔位符判定，
+    # 不做模型名稱比對 (避免日後 Portal 新增 Qwen/DeepSeek 同名模型遭誤刪)
     original_models = config.get("model_list", [])
     static_models = []
     for m in original_models:
-        name = m.get("model_name", "")
         params = m.get("litellm_params", {})
         api_base = str(params.get("api_base", ""))
-        # 若 api_base 為 os.environ 佔位符或自建模型，交由動態端點註冊
+        # 若 api_base 為 os.environ 佔位符，交由動態端點註冊
         if api_base.startswith("os.environ/") and "PORTAL" not in api_base.upper():
-            continue
-        if name in ("Qwen3.8-27B", "qwen3.8", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B") or "qwen" in name.lower() or "deepseek" in name.lower():
             continue
         static_models.append(m)
 
-    sglang_key = get_sglang_api_key()
     discovered_endpoints = []
     has_unknown = False
 
@@ -264,6 +308,7 @@ def main():
         model_alias = info.get("MODEL_ALIAS", "")
         model_path = info.get("RESOLVED_MODEL_PATH", "")
         api_key_env = info.get("API_KEY_ENV", "SGLANG_API_KEY")
+        engine_dir = info.get("ENGINE_DIR", "")
         node = info.get("NODE_HOSTNAME", "unknown")
         port = info.get("PORT", "unknown")
 
@@ -289,7 +334,8 @@ def main():
             continue
 
         # 檢查 3：登入節點主動 HTTP 200 + 合法 JSON 探測 (防止假性 ready 或網路斷線)
-        probe_key = os.environ.get(api_key_env, sglang_key)
+        # 探測金鑰嚴格依 API_KEY_ENV + ENGINE_DIR 查找，絕不退回其他引擎之金鑰
+        probe_key = get_engine_api_key(api_key_env, engine_dir)
         if not is_endpoint_alive(api_base, probe_key, timeout=2.5):
             print(f"⚠️  略過連線失敗端點：Job {job_id} on {node}:{port} (HTTP 200/JSON 檢測未通過)")
             continue
@@ -306,11 +352,8 @@ def main():
             "state": state
         })
 
-    if has_unknown:
-        print("❌ 錯誤：Slurm 狀態查詢異常 (存在 UNKNOWN 狀態之 Job)，為免誤判終止生成！", file=sys.stderr)
-        sys.exit(1)
-
-    # 3. 建構動態模型清單 (嚴格 Fail-Closed，僅採用通過檢查之活躍端點)
+    # 3. 建構動態模型清單 (嚴格 Fail-Closed，僅採用通過檢查之活躍端點；
+    #    存在 UNKNOWN 端點時仍寫出「靜態模型 + 已通過探測端點」之部分成功設定)
     dynamic_deployments = []
     alias_deployments = []
     for ep in discovered_endpoints:
@@ -373,13 +416,18 @@ def main():
     print("==========================================================")
     print(f"🔹 輸出路徑 : {RUNTIME_CONFIG_PATH} (權限: 600)")
     print(f"🔹 靜態模型 : {len(static_models)} 個 (Portal 外部模型)")
-    print(f"🔹 活躍後端 : {len(discovered_endpoints)} 個 SGLang 實例")
+    print(f"🔹 活躍後端 : {len(discovered_endpoints)} 個推論實例")
     if discovered_endpoints:
         for i, ep in enumerate(discovered_endpoints, 1):
             print(f"   [{i}] {ep['model_name']} ➔ {ep['api_base']} (Node: {ep['node']}:{ep['port']}, Job: {ep['job_id']})")
     else:
-        print("   (目前無活躍 SGLang 實例，僅開放 Portal 外部模型服務)")
+        print("   (目前無活躍推論實例，僅開放 Portal 外部模型服務)")
     print("==========================================================")
+
+    # 結尾回報碼：0 = 全部成功；2 = 部分成功 (存在 UNKNOWN 端點，已略過)
+    if has_unknown:
+        print("⚠️  警告：Slurm 狀態查詢異常 (存在 UNKNOWN 狀態之 Job)，該等端點已略過，以其餘可用端點部分生成！", file=sys.stderr)
+        sys.exit(2)
 
 if __name__ == "__main__":
     main()

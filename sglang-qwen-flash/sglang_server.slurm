@@ -80,7 +80,7 @@ PORT_LOCKS_DIR="$PROJECT_ROOT/runtime/port-locks"
 mkdir -p -m 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR"
 chmod 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR" 2>/dev/null || true
 
-ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_flash_${SLURM_JOB_ID}.env"
+ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_flash_${SLURM_JOB_ID:-manual}.env"
 ENGINE_NAME="sglang_flash"
 
 # 5. 載入通用生命週期函式庫 (優先使用頂層 lib/lifecycle.sh)
@@ -113,15 +113,16 @@ echo "=================================================================="
 
 publish_endpoint "starting"
 
-# 背景非同步自檢健康檢查
+# 背景非同步自檢健康檢查 (逾時 HEALTH_TIMEOUT 秒，預設 600，未就緒則主動終止釋放 GPU)
 (
     AUTH_HEADER=()
     if [ -n "${SGLANG_API_KEY:-}" ]; then
         AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
     fi
+    HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-600}"
     TMP_BODY=$(mktemp)
     trap 'rm -f "$TMP_BODY"' EXIT
-    for i in $(seq 1 300); do
+    for i in $(seq 1 $(( HEALTH_TIMEOUT / 2 ))); do
         sleep 2
         HTTP_CODE=$(curl -sS -m 4 -o "$TMP_BODY" -w "%{http_code}" "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || echo "000")
         if validate_health_response "$HTTP_CODE" "$TMP_BODY"; then
@@ -132,7 +133,15 @@ publish_endpoint "starting"
         fi
     done
     rm -f "$TMP_BODY"
-    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang Flash 自檢逾時 (Port $PORT)" >&2
+    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang Flash 自檢逾時 (Port $PORT，逾時 ${HEALTH_TIMEOUT} 秒)，主動終止服務釋放 GPU 資源" >&2
+    # SERVER_PID 於本子殼啟動後才設定，子殼內拿不到；$$ 在子殼內即為主 shell 之 PID，
+    # 對其送 TERM 可靠觸發 cleanup_endpoint trap (清理端點檔與 Port 鎖)
+    if [ -n "${SLURM_JOB_ID:-}" ]; then
+        scancel "${SLURM_JOB_ID}" 2>/dev/null || kill -TERM "$$" 2>/dev/null || true
+    else
+        kill -TERM "$$" 2>/dev/null || true
+    fi
+    exit 1
 ) &
 HEALTH_PID=$!
 
@@ -166,7 +175,9 @@ if [ -n "${SGLANG_API_KEY:-}" ]; then
     CMD+=(--api-key "$SGLANG_API_KEY")
 fi
 
-echo "🔹 執行啟動指令: ${CMD[*]}"
+# 顯示啟動指令時遮罩 --api-key 值，避免金鑰寫入 Slurm log
+DISPLAY_CMD="${CMD[*]}"
+echo "🔹 執行啟動指令: ${DISPLAY_CMD//--api-key */--api-key <masked>}"
 "${CMD[@]}" &
 SERVER_PID=$!
 

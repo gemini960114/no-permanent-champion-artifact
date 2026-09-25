@@ -10,14 +10,33 @@ from litellm.proxy.common_utils.http_parsing_utils import _read_request_body
 logger = logging.getLogger("custom_auth")
 KEYS_FILE = Path(__file__).parent / "api_keys.json"
 
+# 金鑰庫快取 (以 mtime/size/inode 為依據)：高併發下避免每個請求同步讀檔；
+# 解析失敗 (例如讀到寫入瞬間之半成品) 時沿用上一次成功內容，不回傳空字典。
+# 加入 inode 是因為 key_tool 以 os.replace 原子寫入、每次必產生新 inode，
+# 可避免網路檔案系統 mtime 精度較粗時 (同時刻 revoke+generate 且大小恰相同) 讀到舊內容
+_KEYS_CACHE_STAMP = None
+_KEYS_CACHE_DATA = {}
+
 def load_keys() -> dict:
-    if not KEYS_FILE.exists():
+    global _KEYS_CACHE_STAMP, _KEYS_CACHE_DATA
+    try:
+        st = KEYS_FILE.stat()
+    except OSError:
         return {}
+    stamp = (st.st_mtime_ns, st.st_size, st.st_ino)
+    if stamp == _KEYS_CACHE_STAMP:
+        return _KEYS_CACHE_DATA
     try:
         with open(KEYS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            keys = json.load(f)
+        _KEYS_CACHE_STAMP = stamp
+        _KEYS_CACHE_DATA = keys
+        return keys
     except Exception as e:
         logger.error(f"❌ Failed to load {KEYS_FILE}: {e}", exc_info=True)
+        # 沿用上一次成功解析之內容；從未成功過才回傳空字典 (Fail-Closed)
+        if _KEYS_CACHE_STAMP is not None:
+            return _KEYS_CACHE_DATA
         return {}
 
 
@@ -49,7 +68,10 @@ async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth:
     if api_key in keys:
         info = keys[api_key]
         allowed_models = info.get("models", [])
-        is_all_models = allowed_models in (["all"], ["*"], [])
+        if not isinstance(allowed_models, list):
+            allowed_models = []
+        # 只要清單中含有 all 或 * 即視為授權所有模型 (空清單亦同)
+        is_all_models = (not allowed_models) or ("all" in allowed_models) or ("*" in allowed_models)
 
         # 如果此金鑰有指定限制的模型清單，檢查請求中的 model 參數
         if not is_all_models:

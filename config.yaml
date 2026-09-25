@@ -22,7 +22,9 @@ model_list:
 
   # ==========================================
   # HPC 內部模型服務 (由各模型目錄 Slurm Job 啟動)
-  # 端點由 generate_runtime_config.py 自動探索合成
+  # 注意：以下條目僅為 scripts/generate_runtime_config.py 不存在時的靜態 fallback，
+  # 正常流程下 generator 會依 api_base 使用 os.environ/* 佔位符之規則將它們全部
+  # 過濾，改以 runtime/endpoints/ 探測結果動態合成 (含完整別名與負載平衡)。
   # ==========================================
   # 1. Qwen3.8-27B (sglang-qwen-27b/)
   - model_name: Qwen3.8-27B

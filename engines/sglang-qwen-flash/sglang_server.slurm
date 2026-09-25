@@ -175,6 +175,12 @@ if [ -n "${SGLANG_API_KEY:-}" ]; then
     CMD+=(--api-key "$SGLANG_API_KEY")
 fi
 
+# 併發上限：投機解碼 (NEXTN) 開啟時 sglang 預設會自動降為 48，
+# 設定 MAX_RUNNING_REQUESTS 可明確覆蓋（記憶體允許的前提下提高總吞吐）
+if [ -n "${MAX_RUNNING_REQUESTS:-}" ]; then
+    CMD+=(--max-running-requests "$MAX_RUNNING_REQUESTS")
+fi
+
 # 顯示啟動指令時遮罩 --api-key 值，避免金鑰寫入 Slurm log
 DISPLAY_CMD="${CMD[*]}"
 echo "🔹 執行啟動指令: ${DISPLAY_CMD//--api-key */--api-key <masked>}"

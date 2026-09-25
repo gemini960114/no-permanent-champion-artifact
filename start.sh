@@ -81,10 +81,14 @@ load_engine_api_keys() {
             key_vars="$key_vars $key_var"
         fi
     done
-    # 收集引擎目錄 (以 readlink -f 對 symlink 去重)
+    # 收集引擎目錄 (engines/ 下含 config.env 或 config.env.example 之子目錄才視為引擎，
+    # 與 generate_runtime_config.py 的 get_engine_dirs() 判定規則一致；readlink -f 對 symlink 去重)
     local engine_dirs=() seen=""
-    for d in "$DIR"/sglang-* "$DIR"/vllm-*; do
+    for d in "$DIR"/engines/*; do
         [ -d "$d" ] || continue
+        if [ ! -f "$d/config.env" ] && [ ! -f "$d/config.env.example" ]; then
+            continue
+        fi
         real=$(readlink -f "$d" 2>/dev/null || echo "$d")
         [[ " $seen " == *" $real "* ]] && continue
         seen="$seen $real"

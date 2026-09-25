@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# vLLM DeepSeek-V4.1-Flash 狀態檢查腳本 (check_service.sh)
+# SGLang Qwen3.8-Flash-Next 狀態檢查腳本 (check_service.sh)
 # ==============================================================================
 set -euo pipefail
 
@@ -11,21 +11,21 @@ if [ -f "$SCRIPT_DIR/config.env" ]; then
     source "$SCRIPT_DIR/config.env"
 fi
 
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 REGISTRY_DIR="$PROJECT_ROOT/runtime/endpoints"
 
 echo "=========================================================="
-echo " 🔍 vLLM DeepSeek-V4.1-Flash 狀態監控"
+echo " 🔍 SGLang Qwen3.8-Flash-Next 狀態監控"
 echo "=========================================================="
 
-echo "▶ 1. 目前執行中的 Slurm Job (vllm_deepseek):"
-squeue -u "$USER" --name="vllm_deepseek" -o "%.10i %.9P %.14j %.8u %.2t %.10M %.6D %R" || true
+echo "▶ 1. 目前執行中的 Slurm Job (sglang_flash):"
+squeue -u "$USER" --name="sglang_flash" -o "%.10i %.9P %.14j %.8u %.2t %.10M %.6D %R" || true
 echo ""
 
-echo "▶ 2. 活躍端點註冊狀態 (runtime/endpoints/vllm_deepseek_*.env):"
+echo "▶ 2. 活躍端點註冊狀態 (runtime/endpoints/sglang_flash_*.env):"
 FOUND_EP=false
 if [ -d "$REGISTRY_DIR" ]; then
-    for f in "$REGISTRY_DIR"/vllm_deepseek_*.env; do
+    for f in "$REGISTRY_DIR"/sglang_flash_*.env; do
         if [ -f "$f" ]; then
             FOUND_EP=true
             echo "📄 端點檔案: $(basename "$f")"
@@ -36,12 +36,12 @@ if [ -d "$REGISTRY_DIR" ]; then
 fi
 
 if [ "$FOUND_EP" = false ]; then
-    echo "  (目前無已註冊之 DeepSeek 活躍端點)"
+    echo "  (目前無已註冊之 Flash 活躍端點)"
 fi
 echo ""
 
-echo "▶ 3. 最新執行紀錄尾端 (logs/vllm-deepseek-*.err):"
-LATEST_ERR=$(ls -t logs/vllm-deepseek-*.err 2>/dev/null | head -n 1 || true)
+echo "▶ 3. 最新執行紀錄尾端 (logs/sglang-flash-*.err):"
+LATEST_ERR=$(ls -t logs/sglang-flash-*.err 2>/dev/null | head -n 1 || true)
 if [ -n "$LATEST_ERR" ] && [ -f "$LATEST_ERR" ]; then
     echo "📄 日誌檔案: $LATEST_ERR"
     tail -n 15 "$LATEST_ERR" | sed 's/^/   /'

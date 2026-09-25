@@ -3,7 +3,7 @@
 # sglang-qwen/lib/lifecycle.sh (向後相容轉發層)
 # ==============================================================================
 # 優先載入專案頂層共用生命週期函式庫 lib/lifecycle.sh
-_TOP_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" 2>/dev/null && pwd)/lifecycle.sh"
+_TOP_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../lib" 2>/dev/null && pwd)/lifecycle.sh"
 if [ -f "$_TOP_LIB" ]; then
     source "$_TOP_LIB"
     return 0 2>/dev/null || true

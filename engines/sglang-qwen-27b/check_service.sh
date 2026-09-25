@@ -3,7 +3,7 @@
 # SGLang 服務狀態檢查工具 (check_service.sh)
 # ==============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENDPOINTS_DIR="$PROJECT_ROOT/runtime/endpoints"
 cd "$SCRIPT_DIR"
 

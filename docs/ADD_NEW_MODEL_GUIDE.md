@@ -34,9 +34,9 @@ LiteLLM Gateway 採用**全自動動態端點註冊與健康探測機制**：
 
 | 目錄範例 | 推論引擎 | 模型 | 預設 Port 區間 |
 | :--- | :--- | :--- | :--- |
-| `sglang-qwen-27b/` | SGLang | Qwen/Qwen3.8-27B-FP8 | 30000+ |
-| `sglang-qwen-flash/` | SGLang | Qwen/Qwen3.8-Flash-Next-FP8 | 32000+ |
-| `vllm-deepseek-flash/`| vLLM | deepseek-ai/DeepSeek-V4.1-Flash | 33000+ |
+| `engines/sglang-qwen-27b/` | SGLang | Qwen/Qwen3.8-27B-FP8 | 30000+ |
+| `engines/sglang-qwen-flash/` | SGLang | Qwen/Qwen3.8-Flash-Next-FP8 | 32000+ |
+| `engines/vllm-deepseek-flash/`| vLLM | deepseek-ai/DeepSeek-V4.1-Flash | 33000+ |
 | `vllm-llama-70b/` (自訂) | vLLM | meta-llama/Llama-3.3-70B-Instruct | 34000+ |
 
 ---
@@ -64,7 +64,7 @@ LiteLLM Gateway 採用**全自動動態端點註冊與健康探測機制**：
 
 若要新增 SGLang 模型：
 ```bash
-cp -r sglang-qwen-flash vllm-new-model  # 或複製 sglang-qwen-flash
+cp -r engines/sglang-qwen-flash engines/vllm-new-model  # 或複製 sglang-qwen-flash
 cd vllm-new-model
 ```
 
@@ -94,14 +94,14 @@ HEALTH_TIMEOUT=600
 
 > 🔑 **`API_KEY_ENV` 金鑰解析規則**：Gateway 端（`start.sh` 的端點探測與 LiteLLM 執行期 `os.environ/XXX` 解析）依「環境變數（含專案根目錄 `.env`）→ 該引擎目錄的 `config.env`」順序查找 `API_KEY_ENV` 指名的變數，找不到**不會**退回其他引擎的金鑰。
 > 由於環境變數優先且同名變數僅對應一個值，**多個引擎若要使用不同金鑰，請各自採用不同的變數名稱**（例如 `MYMODEL_API_KEY`）並同步設定 `API_KEY_ENV`。
-> 端點檔會自動寫入 `ENGINE_DIR` 供合成器回溯源頭；legacy 檔案缺少此欄位時，合成器會掃描各引擎目錄（`sglang-*` / `vllm-*`）並對 symlink 去重。
+> 端點檔會自動寫入 `ENGINE_DIR` 供合成器回溯源頭；legacy 檔案缺少此欄位時，合成器會掃描 `engines/` 下含 `config.env`（或 `config.env.example`）之子目錄並對 symlink 去重。
 
 ### 步驟 3：以 `vllm_server.slurm` 為範本修改 Slurm 腳本
 
-**請勿從空白腳本重寫**。直接複製最新的 [`vllm-deepseek-flash/vllm_server.slurm`](../vllm-deepseek-flash/vllm_server.slurm) 再修改——它已內建 `ENGINE_DIR` 寫入、`${SLURM_JOB_ID:-manual}` fallback、`HEALTH_TIMEOUT` 逾時自動退場與選用參數條件傳入，照抄才不會與函式庫實作脫節：
+**請勿從空白腳本重寫**。直接複製最新的 [`engines/vllm-deepseek-flash/vllm_server.slurm`](../engines/vllm-deepseek-flash/vllm_server.slurm) 再修改——它已內建 `ENGINE_DIR` 寫入、`${SLURM_JOB_ID:-manual}` fallback、`HEALTH_TIMEOUT` 逾時自動退場與選用參數條件傳入，照抄才不會與函式庫實作脫節：
 
 ```bash
-cp vllm-deepseek-flash/vllm_server.slurm mymodel_server.slurm
+cp engines/vllm-deepseek-flash/vllm_server.slurm mymodel_server.slurm
 ```
 
 需要修改的位置只有以下幾處（其餘照抄）：
@@ -109,7 +109,7 @@ cp vllm-deepseek-flash/vllm_server.slurm mymodel_server.slurm
 | 修改處 | 範本中的值 | 說明 |
 | :--- | :--- | :--- |
 | `#SBATCH --job-name=` | `vllm_deepseek` | Slurm 作業名稱（同時用於 log 檔名） |
-| `WORK_DIR` fallback 路徑 | `/work/.../vllm-deepseek-flash` | Slurm spool 環境下 `BASH_SOURCE` 指向 `/var/spool/slurmd`，需絕對路徑 fallback |
+| `WORK_DIR` fallback 路徑 | `/work/.../engines/vllm-deepseek-flash` | Slurm spool 環境下 `BASH_SOURCE` 指向 `/var/spool/slurmd`，需絕對路徑 fallback |
 | `ENGINE_NAME` | `vllm_deepseek` | 端點檔前綴：`runtime/endpoints/${ENGINE_NAME}_${SLURM_JOB_ID:-manual}.env` |
 | `ENDPOINT_REGISTRY_FILE` | `vllm_deepseek_${SLURM_JOB_ID:-manual}.env` | 與 `ENGINE_NAME` 保持一致 |
 | `API_KEY_ENV`（於 `config.env`） | `VLLM_API_KEY` | 引擎鑑權金鑰的變數名（解析規則見步驟 2） |
@@ -175,6 +175,6 @@ bash submit_slurm.sh
 
 ## 6. 範例目錄對照
 
-- **SGLang 範例**：參考 [sglang-qwen-27b/](file:///path/to/work/github/litellm-proxy/sglang-qwen-27b) 或 [sglang-qwen-flash/](file:///path/to/work/github/litellm-proxy/sglang-qwen-flash)
-- **vLLM 範例**：參考 [vllm-deepseek-flash/](file:///path/to/work/github/litellm-proxy/vllm-deepseek-flash)
+- **SGLang 範例**：參考 [engines/sglang-qwen-27b/](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b) 或 [engines/sglang-qwen-flash/](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-flash)
+- **vLLM 範例**：參考 [engines/vllm-deepseek-flash/](file:///path/to/work/github/litellm-proxy/engines/vllm-deepseek-flash)
 - **共用生命週期程式庫**：參考 [lib/lifecycle.sh](file:///path/to/work/github/litellm-proxy/lib/lifecycle.sh)

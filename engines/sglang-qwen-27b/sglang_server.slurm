@@ -19,7 +19,7 @@ set -eo pipefail
 # 1. 確保工作目錄 (SLURM 計算節點上 BASH_SOURCE 會指向 /var/spool/slurmd，故優先採用 SLURM_SUBMIT_DIR)
 WORK_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 if [[ "$WORK_DIR" == *"/var/spool/slurmd"* ]] || [ ! -w "$WORK_DIR" ]; then
-    WORK_DIR="/path/to/work/github/litellm-proxy/sglang-qwen-27b"
+    WORK_DIR="/path/to/work/github/litellm-proxy/engines/sglang-qwen-27b"
 fi
 cd "$WORK_DIR"
 mkdir -p -m 700 logs
@@ -83,7 +83,7 @@ NODE_IP="$(hostname -I | awk '{print $1}')"
 # ------------------------------------------------------------------------------
 # 端點登錄檔 (Endpoint Registry) 與 Port 原子鎖目錄
 # ------------------------------------------------------------------------------
-PROJECT_ROOT="$(cd "$WORK_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$WORK_DIR/../.." && pwd)"
 REGISTRY_DIR="$PROJECT_ROOT/runtime/endpoints"
 PORT_LOCKS_DIR="$PROJECT_ROOT/runtime/port-locks"
 mkdir -p -m 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR" 2>/dev/null || true

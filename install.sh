@@ -64,7 +64,7 @@ else
     chmod 600 .env
 fi
 
-for conf in sglang-*/config.env vllm-*/config.env; do
+for conf in engines/*/config.env; do
     if [ -f "$conf" ]; then
         chmod 600 "$conf" 2>/dev/null || true
     fi
@@ -72,7 +72,7 @@ done
 
 # 3. 確保輔助腳本與模型啟動腳本具備執行權限
 chmod +x start.sh stop.sh test.sh key_tool.py install.sh lib/*.sh 2>/dev/null || true
-chmod +x sglang-*/*.sh vllm-*/*.sh 2>/dev/null || true
+chmod +x engines/*/*.sh 2>/dev/null || true
 
 # 4. 驗證 Gateway 安裝
 echo "▶ 驗證 Gateway 安裝版本..."
@@ -80,8 +80,8 @@ VERSION_INFO=$(.venv/bin/python -c "import importlib.metadata; print('LiteLLM ve
 echo "  $VERSION_INFO"
 
 
-# 5. 檢查 sglang-qwen 推論容器環境 (純 Singularity 零安裝架構)
-echo "▶ 檢查 sglang-qwen 推論環境..."
+# 5. 檢查推論引擎容器環境 (純 Singularity 零安裝架構，引擎位於 engines/)
+echo "▶ 檢查推論引擎環境..."
 SIF_FILE="/path/to/work/containers/sglang_latest.sif"
 if [ -f "$SIF_FILE" ]; then
     echo "  ✅ 找到 SGLang 容器映像檔: $SIF_FILE"
@@ -89,7 +89,7 @@ else
     echo "  ⚠️ 未找到 SGLang 容器映像檔 ($SIF_FILE)，若需使用本機推論請確認容器路徑。"
 fi
 if command -v /usr/bin/singularity >/dev/null 2>&1 || command -v singularity >/dev/null 2>&1; then
-    echo "  ✅ 系統 Singularity/Apptainer 執行檔就緒 (sglang-qwen 為零安裝容器化，無需 pip 安裝套件)。"
+    echo "  ✅ 系統 Singularity/Apptainer 執行檔就緒 (各引擎為零安裝容器化，無需 pip 安裝套件)。"
 fi
 
 echo "=========================================================="
@@ -102,9 +102,9 @@ echo " • 測試服務: ./test.sh"
 echo " • 管理金鑰: ./key_tool.py generate --name 'User' --models all"
 echo " • 停止服務: ./stop.sh"
 echo ""
-echo " [內部推論服務 (純 Singularity 零安裝)]"
-echo " • 引擎目錄: sglang-qwen-27b/ (Qwen3.8-27B)、sglang-qwen-flash/ (Qwen3.8-Flash)、vllm-deepseek-flash/ (DeepSeek-V4.1-Flash)"
-echo " • 下載權重: cd sglang-qwen-27b && ./download_model.sh Qwen/Qwen3.8-27B"
-echo " • 派送服務: cd sglang-qwen-27b && ./submit_slurm.sh"
-echo " • 檢查狀態: cd sglang-qwen-27b && ./check_service.sh"
+echo " [內部推論服務 (純 Singularity 零安裝，引擎位於 engines/)]"
+echo " • 引擎目錄: engines/sglang-qwen-27b/ (Qwen3.8-27B)、engines/sglang-qwen-flash/ (Qwen3.8-Flash)、engines/vllm-deepseek-flash/ (DeepSeek-V4.1-Flash)"
+echo " • 下載權重: cd engines/sglang-qwen-27b && ./download_model.sh Qwen/Qwen3.8-27B"
+echo " • 派送服務: cd engines/sglang-qwen-27b && ./submit_slurm.sh"
+echo " • 檢查狀態: cd engines/sglang-qwen-27b && ./check_service.sh"
 echo "=========================================================="

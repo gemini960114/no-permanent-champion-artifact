@@ -330,12 +330,13 @@ class TestEndpointHttpJsonValidation(unittest.TestCase):
         self.assertFalse(grc.is_endpoint_alive("http://127.0.0.1:59999/v1", ""))
 
 class TestEngineApiKeyLookup(unittest.TestCase):
-    """測試 get_engine_api_key 之嚴格歸屬查找 (環境變數優先、絕不跨引擎退回)"""
+    """測試 get_engine_api_key 之嚴格歸屬查找 (環境變數優先、絕不跨引擎退回) 與引擎發現規則"""
 
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
-        self.sglang_dir = os.path.join(self.test_dir, "sglang-fake")
-        self.vllm_dir = os.path.join(self.test_dir, "vllm-fake")
+        self.engines_dir = os.path.join(self.test_dir, "engines")
+        self.sglang_dir = os.path.join(self.engines_dir, "sglang-fake")
+        self.vllm_dir = os.path.join(self.engines_dir, "vllm-fake")
         os.makedirs(self.sglang_dir)
         os.makedirs(self.vllm_dir)
         # 測試用假金鑰 (非真實秘密)
@@ -369,24 +370,44 @@ class TestEngineApiKeyLookup(unittest.TestCase):
             self.assertEqual(grc.get_engine_api_key("VLLM_API_KEY", self.sglang_dir), "")
             self.assertEqual(grc.get_engine_api_key("SGLANG_API_KEY", self.vllm_dir), "")
 
-    def test_legacy_scan_without_engine_dir_and_symlink_dedup(self):
-        """legacy 端點檔無 ENGINE_DIR 時掃描各引擎目錄，且 symlink 去重"""
+    def test_engine_discovery_requires_config_env(self):
+        """engines/ 發現規則：含 config.env 或 config.env.example 之子目錄才視為引擎；
+        無設定檔之子目錄 (如 _template/) 不被掃入；symlink 以 realpath 去重"""
+        # 只含 config.env.example 之目錄 → 應視為引擎
+        example_only = os.path.join(self.engines_dir, "new-engine")
+        os.makedirs(example_only)
+        with open(os.path.join(example_only, "config.env.example"), "w", encoding="utf-8") as f:
+            f.write("# example only\n")
+        # 無任何設定檔之子目錄 → 不應被視為引擎
+        for non_engine in ("_template", "docs", "scratch"):
+            os.makedirs(os.path.join(self.engines_dir, non_engine))
+        # symlink 指向 sglang-fake → 應去重
+        link = os.path.join(self.engines_dir, "sglang-link")
+        os.symlink(self.sglang_dir, link)
+
+        with patch.object(grc, "PROJECT_ROOT", self.test_dir):
+            dirs = grc.get_engine_dirs()
+        names = sorted(os.path.basename(d) for d in dirs)
+        self.assertIn("sglang-fake", names)
+        self.assertIn("vllm-fake", names)
+        self.assertIn("new-engine", names, "只含 config.env.example 之子目錄應視為引擎")
+        self.assertNotIn("_template", names, "無設定檔之子目錄不應被掃入")
+        self.assertNotIn("docs", names, "無設定檔之子目錄不應被掃入")
+        self.assertNotIn("scratch", names, "無設定檔之子目錄不應被掃入")
+        self.assertNotIn("sglang-link", names, "symlink 應以 realpath 去重")
+        reals = [os.path.realpath(d) for d in dirs]
+        self.assertEqual(len(reals), len(set(reals)), "symlink 未正確去重！")
+
+        os.remove(link)
+
+    def test_legacy_scan_without_engine_dir(self):
+        """legacy 端點檔無 ENGINE_DIR 時掃描 engines/ 下之引擎目錄"""
         with patch.dict(os.environ):
             self._clean_key_env()
             with patch.object(grc, "PROJECT_ROOT", self.test_dir):
                 self.assertEqual(grc.get_engine_api_key("VLLM_API_KEY"), "fake-vllm-key-111")
                 self.assertEqual(grc.get_engine_api_key("SGLANG_API_KEY"), "fake-sglang-key-000")
                 self.assertEqual(grc.get_engine_api_key("NOT_EXIST_KEY_XYZ"), "")
-                # 建立 symlink 指向 sglang-fake，掃描結果不得重複
-                link = os.path.join(self.test_dir, "sglang-link")
-                os.symlink(self.sglang_dir, link)
-                try:
-                    dirs = grc.get_engine_dirs()
-                    reals = [os.path.realpath(d) for d in dirs]
-                    self.assertEqual(len(reals), len(set(reals)), "symlink 未正確去重！")
-                    self.assertEqual(len(reals), 2)
-                finally:
-                    os.remove(link)
 
 
 class TestGeneratorMainFlow(unittest.TestCase):

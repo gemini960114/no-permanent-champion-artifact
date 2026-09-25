@@ -44,18 +44,25 @@ ENDPOINTS_DIR = os.path.join(PROJECT_ROOT, "runtime", "endpoints")
 PORT_LOCKS_DIR = os.path.join(PROJECT_ROOT, "runtime", "port-locks")
 
 def get_engine_dirs() -> list:
-    """掃描專案下所有引擎目錄 (sglang-* / vllm-*)，以 realpath 對 symlink 去重"""
+    """
+    掃描 engines/ 下所有引擎目錄 (外掛模組)：
+    - 僅將「含 config.env 或 config.env.example 之子目錄」視為引擎
+      (避免 _template/、文件目錄等被誤掃)
+    - symlink 以 realpath 去重
+    """
     dirs = []
     seen = set()
-    for pattern in ("sglang-*", "vllm-*"):
-        for d in sorted(glob.glob(os.path.join(PROJECT_ROOT, pattern))):
-            if not os.path.isdir(d):
-                continue
-            real = os.path.realpath(d)
-            if real in seen:
-                continue
-            seen.add(real)
-            dirs.append(d)
+    for d in sorted(glob.glob(os.path.join(PROJECT_ROOT, "engines", "*"))):
+        if not os.path.isdir(d):
+            continue
+        if not (os.path.isfile(os.path.join(d, "config.env"))
+                or os.path.isfile(os.path.join(d, "config.env.example"))):
+            continue
+        real = os.path.realpath(d)
+        if real in seen:
+            continue
+        seen.add(real)
+        dirs.append(d)
     return dirs
 
 def read_config_env_var(config_path: str, var_name: str) -> str:
@@ -76,7 +83,8 @@ def get_engine_api_key(key_name: str, engine_dir: str = "") -> str:
     取得推論引擎鑑權金鑰 (嚴格依歸屬查找，絕不退回其他引擎之金鑰)：
     1. 環境變數優先 (含 .env 載入值)
     2. 指定 engine_dir 時：僅讀取該引擎目錄之 config.env
-    3. 未指定 engine_dir (legacy 端點檔無 ENGINE_DIR)：掃描各引擎目錄 (symlink 去重)
+    3. 未指定 engine_dir (legacy 端點檔無 ENGINE_DIR)：掃描 engines/ 下含
+       config.env / config.env.example 之子目錄 (symlink 去重)
     找不到回傳空字串 (Fail-Closed，探測將失敗並略過該端點)
     """
     if not key_name:

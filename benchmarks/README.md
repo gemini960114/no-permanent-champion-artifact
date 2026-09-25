@@ -17,7 +17,7 @@
                              │
                              │  (HPC 內部高速私網 INTERNAL_CIDR)
                              ▼
-                     [LiteLLM 運行節點 (如 login-4:54921)]
+                     [LiteLLM 運行節點 (如 login-2:54921)]
                              │
                              │  (動態負載平衡 Simple-Shuffle)
                              ▼
@@ -38,7 +38,7 @@ cd /path/to/work/github/litellm-proxy
 cat .litellm_node
 ```
 
-> **輸出範例**：`login-4`（或 `login-3`、`login-1` 等）。
+> **輸出範例**：`login-2`（或 `login-3`、`login-1` 等）。
 > 請記住這個節點代號，後續在外部建立 SSH Tunnel 時需使用。
 
 ---
@@ -48,18 +48,18 @@ cat .litellm_node
 打開**測試 VM 的終端機**，將本地端點 `127.0.0.1:4000` 透過 SSH 轉發至該執行節點：
 
 ```bash
-# 請將 <TARGET_NODE> 換成步驟 1 查到的節點名稱 (例如 login-4)
+# 請將 <TARGET_NODE> 換成步驟 1 查到的節點名稱 (例如 login-2)
 ssh -N \
   -o ServerAliveInterval=30 \
   -o ServerAliveCountMax=6 \
   -o ExitOnForwardFailure=yes \
-  -L 127.0.0.1:4000:login-4:54921 \
+  -L 127.0.0.1:4000:login-2:54921 \
   your-user@nano4.nchc.org.tw
 ```
 *(輸入密碼與 OTP，保持此終端機視窗開啟)*
 
 > 💡 **關鍵設計**：
-> 由於我們在指令中明確指定了目標節點（如 `login-4:54921`），無論 `nano4.nchc.org.tw` 隨機把您的連線丟到哪一台登入節點（例如抽中 `login-1`），該節點都會透過內部私網將流量自動轉送至 `login-4`，**100% 穩定接通，徹底免除隨機抽籤連不上的問題**！
+> 由於我們在指令中明確指定了目標節點（如 `login-2:54921`），無論 `nano4.nchc.org.tw` 隨機把您的連線丟到哪一台登入節點（例如抽中 `login-1`），該節點都會透過內部私網將流量自動轉送至 `login-2`，**100% 穩定接通，徹底免除隨機抽籤連不上的問題**！
 
 ---
 

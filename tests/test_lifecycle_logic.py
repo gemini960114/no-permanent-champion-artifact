@@ -384,6 +384,10 @@ class TestEngineApiKeyLookup(unittest.TestCase):
         # symlink 指向 sglang-fake → 應去重
         link = os.path.join(self.engines_dir, "sglang-link")
         os.symlink(self.sglang_dir, link)
+        # 排序在實體目錄之前的 symlink (模擬 sglang-qwen < sglang-qwen-27b)
+        # → 去重時應保留實體目錄 vllm-fake，而非 symlink
+        early_link = os.path.join(self.engines_dir, "aaa-link")
+        os.symlink(self.vllm_dir, early_link)
 
         with patch.object(grc, "PROJECT_ROOT", self.test_dir):
             dirs = grc.get_engine_dirs()
@@ -395,10 +399,12 @@ class TestEngineApiKeyLookup(unittest.TestCase):
         self.assertNotIn("docs", names, "無設定檔之子目錄不應被掃入")
         self.assertNotIn("scratch", names, "無設定檔之子目錄不應被掃入")
         self.assertNotIn("sglang-link", names, "symlink 應以 realpath 去重")
+        self.assertNotIn("aaa-link", names, "排序在前的 symlink 不應取代實體目錄")
         reals = [os.path.realpath(d) for d in dirs]
         self.assertEqual(len(reals), len(set(reals)), "symlink 未正確去重！")
 
         os.remove(link)
+        os.remove(early_link)
 
     def test_legacy_scan_without_engine_dir(self):
         """legacy 端點檔無 ENGINE_DIR 時掃描 engines/ 下之引擎目錄"""

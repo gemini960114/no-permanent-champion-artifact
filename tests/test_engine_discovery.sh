@@ -56,8 +56,12 @@ if [ "$PY_DIRS" != "alpha beta" ]; then
 fi
 echo "  ✅ python get_engine_dirs: alpha + beta 入列、_template 排除、alpha-link 去重"
 
+# 排序在實體目錄之前的 symlink (模擬 sglang-qwen < sglang-qwen-27b)
+ln -s "$TMP_ROOT/engines/alpha" "$TMP_ROOT/engines/0-early-link"
+
 # ------------------------------------------------------------------------------
-# 測試 2: start.sh 端 load_engine_api_keys —— 掃描範圍僅限 engines/
+# 測試 2: start.sh 端 load_engine_api_keys —— 掃描範圍僅限 engines/，
+#         且去重優先保留實體目錄 (ENGINE_DISCOVERED_DIRS 觀測)
 # ------------------------------------------------------------------------------
 sed -n '/^load_engine_api_keys() {$/,/^}$/p' "$PROJECT_ROOT/start.sh" > "$TMP_ROOT/func.sh"
 if [ ! -s "$TMP_ROOT/func.sh" ]; then
@@ -72,13 +76,31 @@ source "'"$TMP_ROOT"'/func.sh"
 unset TEST_API_KEY
 load_engine_api_keys > /dev/null
 echo "${TEST_API_KEY:-none}"
+echo "${ENGINE_DISCOVERED_DIRS[*]:-none}"
 ')
 
-if [ "$LOADER_RESULT" != "fake-alpha" ]; then
-    echo "❌ 測試 2 失敗：start.sh loader 載入結果異常: [$LOADER_RESULT] (預期: fake-alpha；若為 fake-root-level 代表掃描範圍未限 engines/)" >&2
+LOADER_KEY=$(echo "$LOADER_RESULT" | head -1)
+LOADER_DIRS=$(echo "$LOADER_RESULT" | tail -1)
+
+if [ "$LOADER_KEY" != "fake-alpha" ]; then
+    echo "❌ 測試 2 失敗：start.sh loader 載入結果異常: [$LOADER_KEY] (預期: fake-alpha；若為 fake-root-level 代表掃描範圍未限 engines/)" >&2
     exit 1
 fi
 echo "  ✅ start.sh loader: 自 engines/alpha 載入金鑰，根目錄 config.env 未被誤掃"
+
+FOUND_REAL=NG
+FOUND_LINK=NG
+for entry in $LOADER_DIRS; do
+    case "$entry" in
+        */engines/alpha) FOUND_REAL=OK ;;
+        */engines/0-early-link) FOUND_LINK=OK ;;
+    esac
+done
+if [ "$FOUND_REAL" != "OK" ] || [ "$FOUND_LINK" = "OK" ]; then
+    echo "❌ 測試 2 失敗：去重應保留實體目錄 alpha 而非排序在前的 symlink (實際: [$LOADER_DIRS])" >&2
+    exit 1
+fi
+echo "  ✅ 去重優先保留實體目錄 (engines/alpha)，排序在前的 symlink 未入列"
 
 # ------------------------------------------------------------------------------
 # 測試 3: 環境變數既有值優先 (不被引擎 config.env 覆蓋)

@@ -8,12 +8,12 @@
 
 | 檔案名稱 | 類型 | 說明 |
 | :--- | :--- | :--- |
-| [`config.env`](file:///path/to/work/github/litellm-proxy/sglang-qwen/config.env) | 配置設定 | 集中管理所有 SLURM 資源配額、容器路徑、模型名稱與 SGLang 核心推論參數 |
-| [`download_model.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/download_model.sh) | 下載工具 | 透過 `uvx --from huggingface_hub` 高速下載 HuggingFace 模型權重至 `/path/to/work/models` |
-| [`submit_slurm.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/submit_slurm.sh) | 派送腳本 | 支援 `-w <Node>` 指定節點、`--dry-run` 與自訂參數，安全派送作業至 SLURM |
-| [`sglang_server.slurm`](file:///path/to/work/github/litellm-proxy/sglang-qwen/sglang_server.slurm) | SLURM 核心 | 申請 1 顆 H200 GPU、支援同機 Port 自動避讓與二階段狀態發布 |
-| [`lib/lifecycle.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/lib/lifecycle.sh) | 共用函式庫 | 封裝 Port 原子鎖搶佔、二階段發布、退場清理核驗與 HTTP 200/JSON 自檢 |
-| [`check_service.sh`](file:///path/to/work/github/litellm-proxy/sglang-qwen/check_service.sh) | 檢查工具 | 即時查詢 SLURM 佇列、掃描 `runtime/endpoints/*.env`、測試 `/v1/models` 並檢視最新日誌 |
+| [`config.env`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/config.env) | 配置設定 | 集中管理所有 SLURM 資源配額、容器路徑、模型名稱與 SGLang 核心推論參數 |
+| [`download_model.sh`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/download_model.sh) | 下載工具 | 透過 `uvx --from huggingface_hub` 高速下載 HuggingFace 模型權重至 `/path/to/work/models` |
+| [`submit_slurm.sh`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/submit_slurm.sh) | 派送腳本 | 支援 `-w <Node>` 指定節點、`--dry-run` 與自訂參數，安全派送作業至 SLURM |
+| [`sglang_server.slurm`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/sglang_server.slurm) | SLURM 核心 | 申請 1 顆 H200 GPU、支援同機 Port 自動避讓與二階段狀態發布 |
+| [`lib/lifecycle.sh`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/lib/lifecycle.sh) | 共用函式庫 | 封裝 Port 原子鎖搶佔、二階段發布、退場清理核驗與 HTTP 200/JSON 自檢 |
+| [`check_service.sh`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/check_service.sh) | 檢查工具 | 即時查詢 SLURM 佇列、掃描 `runtime/endpoints/*.env`、測試 `/v1/models` 並檢視最新日誌 |
 | `../runtime/endpoints/` | 狀態註冊庫 | 存放各實例專屬的 `.env` 狀態檔，供 LiteLLM 自動合成多實例負載平衡設定 |
 | `../runtime/port-locks/` | Port 鎖目錄 | 存放各實例原子預約的節點連接埠鎖目錄，防範同機連接埠衝突 |
 | `logs/` | 日誌目錄 | 存放 SLURM 標準輸出 (`.out`) 與 SGLang 運行日誌 (`.err`) |
@@ -43,7 +43,7 @@
 本專案使用 `uvx` 自動調用 `huggingface-cli` 進行多執行緒高速下載，並自動設定 Hugging Face Token：
 
 ```bash
-cd /path/to/work/github/litellm-proxy/sglang-qwen
+cd /path/to/work/github/litellm-proxy/engines/sglang-qwen-27b
 
 # 下載 Qwen/Qwen3.8-27B (約 52GB，18 個 safetensors 分塊)
 ./download_model.sh Qwen/Qwen3.8-27B
@@ -151,7 +151,7 @@ curl -X POST "http://127.0.0.1:4000/v1/chat/completions" \
 
 ## 核心參數配置說明 (`config.env`)
 
-所有運算資源與推論參數均在 [`config.env`](file:///path/to/work/github/litellm-proxy/sglang-qwen/config.env) 集中維護：
+所有運算資源與推論參數均在 [`config.env`](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b/config.env) 集中維護：
 
 | 參數名稱 | 建議值 | 說明 |
 | :--- | :--- | :--- |

@@ -82,18 +82,35 @@ load_engine_api_keys() {
         fi
     done
     # 收集引擎目錄 (engines/ 下含 config.env 或 config.env.example 之子目錄才視為引擎，
-    # 與 generate_runtime_config.py 的 get_engine_dirs() 判定規則一致；readlink -f 對 symlink 去重)
-    local engine_dirs=() seen=""
+    # 與 generate_runtime_config.py 的 get_engine_dirs() 判定規則一致；readlink -f 對 symlink 去重，
+    # 且同一 realpath 優先保留實體目錄而非相容連結)
+    local engine_dirs=() seen="" d real real_set=""
+    # 第一輪：記錄實體 (非 symlink) 引擎目錄之 realpath
+    for d in "$DIR"/engines/*; do
+        [ -d "$d" ] || continue
+        [ -L "$d" ] && continue
+        if [ ! -f "$d/config.env" ] && [ ! -f "$d/config.env.example" ]; then
+            continue
+        fi
+        real=$(readlink -f "$d" 2>/dev/null || echo "$d")
+        real_set="$real_set $real"
+    done
+    # 第二輪：收集引擎目錄 (symlink 指向實體引擎目錄者略過，保留實體路徑)
     for d in "$DIR"/engines/*; do
         [ -d "$d" ] || continue
         if [ ! -f "$d/config.env" ] && [ ! -f "$d/config.env.example" ]; then
             continue
         fi
         real=$(readlink -f "$d" 2>/dev/null || echo "$d")
+        if [ -L "$d" ] && [[ " $real_set " == *" $real "* ]]; then
+            continue
+        fi
         [[ " $seen " == *" $real "* ]] && continue
         seen="$seen $real"
         engine_dirs+=("$d")
     done
+    # 記錄發現結果供測試與除錯觀測 (非 local)
+    ENGINE_DISCOVERED_DIRS=("${engine_dirs[@]}")
     # 依序查找：環境變數 (含 .env 載入值) 已有者優先，其次各引擎 config.env
     # (僅輸出變數名稱與配置狀態，絕不印出金鑰值)
     for key_var in $key_vars; do

@@ -48,10 +48,11 @@ def get_engine_dirs() -> list:
     掃描 engines/ 下所有引擎目錄 (外掛模組)：
     - 僅將「含 config.env 或 config.env.example 之子目錄」視為引擎
       (避免 _template/、文件目錄等被誤掃)
-    - symlink 以 realpath 去重
+    - symlink 以 realpath 去重，且同一 realpath 「優先保留實體目錄」，
+      避免對外顯示相容連結路徑 (如 engines/sglang-qwen)
     """
-    dirs = []
-    seen = set()
+    candidates = []
+    real_dirs = set()
     for d in sorted(glob.glob(os.path.join(PROJECT_ROOT, "engines", "*"))):
         if not os.path.isdir(d):
             continue
@@ -59,6 +60,15 @@ def get_engine_dirs() -> list:
                 or os.path.isfile(os.path.join(d, "config.env.example"))):
             continue
         real = os.path.realpath(d)
+        candidates.append((d, real))
+        if not os.path.islink(d):
+            real_dirs.add(real)
+    dirs = []
+    seen = set()
+    for d, real in candidates:
+        # symlink 指向 engines/ 內之實體引擎目錄 → 略過，保留實體路徑
+        if os.path.islink(d) and real in real_dirs:
+            continue
         if real in seen:
             continue
         seen.add(real)

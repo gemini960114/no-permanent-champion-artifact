@@ -23,13 +23,28 @@ POLL_INTERVAL="${POLL_INTERVAL:-15}"   # 輪詢間隔 (秒)
 # ------------------------------------------------------------------------------
 list_engines() {
     echo "可用引擎 (engines/ 下含 submit_slurm.sh 之子目錄)："
-    local d
+    local d real tag cfg model aliases status
     for d in engines/*/; do
         [ -f "$d/submit_slurm.sh" ] || continue
-        local real tag=""
         real=$(realpath "$d")
         tag=$(grep -m1 '^#SBATCH --job-name=' "$real"/*server.slurm 2>/dev/null | sed 's/.*=//')
-        printf "  • %-24s (job-name: %s)\n" "$(basename "$d")" "${tag:-未知}"
+        # 模型資訊來源：config.env (本地實際設定) → config.env.example (範本)
+        cfg=""
+        [ -f "$real/config.env" ] && cfg="$real/config.env"
+        [ -z "$cfg" ] && [ -f "$real/config.env.example" ] && cfg="$real/config.env.example"
+        model=$(grep -m1 '^MODEL_NAME=' "$cfg" 2>/dev/null | cut -d= -f2-)
+        aliases=$(grep -m1 '^MODEL_ALIAS=' "$cfg" 2>/dev/null | cut -d= -f2-)
+        # 運行狀態：依 slurm job-name 偵測
+        status="⚪ 離線"
+        if [ -n "$tag" ] && squeue -h -u "$(id -un)" -n "$tag" 2>/dev/null | grep -q .; then
+            status="🟢 運行中"
+        fi
+        printf "  • %-24s %s (job-name: %s)\n" "$(basename "$d")" "$status" "${tag:-未知}"
+        if [ -n "$model" ]; then
+            printf "      模型: %s%s\n" "$model" "${aliases:+  |  主要別名: ${aliases}}"
+        else
+            printf "      模型: (未設定，見 %s)\n" "${cfg:+$(basename "$cfg")}"
+        fi
     done
 }
 

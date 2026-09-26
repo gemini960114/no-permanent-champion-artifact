@@ -2,6 +2,12 @@
 
 本指南說明如何在 LiteLLM Gateway 叢集中，以**標準化、隨插即用（Plug-and-Play）**的方式新增任何 LLM 模型或推論後端（例如 SGLang、vLLM、TGI、TensorRT-LLM 等）。
 
+> 💡 **更快的方式**：本指南的手動流程已升級為工具化一鍵指令（`new_engine.sh`／
+> `validate_engine.sh`／`start_models.sh`，見 [ENGINE_LIFECYCLE_GUIDE.md](./ENGINE_LIFECYCLE_GUIDE.md)）
+> 與 **AI 評估技能**（貼上 HF 模型 URL 即自動評估可行性與參數、經同意後建模，
+> 見 [`.agents/skills/model-onboarding/`](../.agents/skills/model-onboarding/README.md)）。
+> 本指南保留作為架構原理與手動細節的完整參考。
+
 ---
 
 ## 1. 架構核心概念

@@ -7,6 +7,31 @@
 > 供應商中立）；日後若需 Claude Code，加一條 symlink 即可：
 > `mkdir -p .claude/skills && ln -s ../../.agents/skills/model-onboarding .claude/skills/`。
 
+## 如何使用（三種方式）
+
+**方式 ①（建議）：對 AI 助手說自然語言**——在 repo 內啟用 opencode 等 agent，
+直接貼 HF 模型 URL＋你的問題（範例見下方）。Skill 依 frontmatter 描述自動載入，
+AI 會：跑實測腳本 → 給評估報告（框架／版本／記憶體／參數草案）→ **等你點頭** →
+`scaffold → 驗證 → 上線 → 登記` 一路做完。
+
+**方式 ②：手動跑評估工具**（不想透過 AI、只要快速查證時）：
+```bash
+.agents/skills/model-onboarding/scripts/check_engine_support.sh <架構關鍵字>
+.agents/skills/model-onboarding/scripts/estimate_fit.py --params 604 --precision fp8
+```
+
+**方式 ③：完全手動建模**（不經評估，適合熟手）：
+```bash
+./new_engine.sh <框架>-<模型>-<精度> --from <原型>   # scaffold
+cd engines/<新引擎> && vim config.env                 # 改模型名/參數
+cd ../.. && ./validate_engine.sh <新引擎>             # 兩階段驗證
+./start_models.sh <新引擎>                            # 一鍵上線
+```
+
+完整流程細節與鐵律（實測優先／同意才動工／三選一結論）見
+[SKILL.md](./SKILL.md)；操作全貌見
+[docs/ENGINE_LIFECYCLE_GUIDE.md](../../docs/ENGINE_LIFECYCLE_GUIDE.md)。
+
 ## 使用者端：自然語言 Prompt 範例
 
 直接用日常語言描述即可，AI 會辨識意圖套用本 skill：

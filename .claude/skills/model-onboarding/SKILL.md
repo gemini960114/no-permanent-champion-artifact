@@ -26,6 +26,7 @@ description: >-
 
 ### Step 2：實測引擎支援（跑腳本，別徒手）
 ```bash
+# 於 repo 根目錄執行（或改用絕對路徑 /path/to/work/github/litellm-proxy/...）
 .claude/skills/model-onboarding/scripts/check_engine_support.sh <架構關鍵字>
 # 檢查三個現有 image (sglang 0.5.19/0.5.20, vllm 0.29.1rc1) 的模型檔
 # ＋ reasoning-parser 合法選項 (DetectorMap)
@@ -37,9 +38,10 @@ description: >-
 ### Step 3：硬體適配計算（跑腳本）
 ```bash
 .claude/skills/model-onboarding/scripts/estimate_fit.py --params <總參數B> --precision <bf16|fp8|int4>
-# 自動對照 4×H200 (564GB) / 8×H200 (1,128GB) / df /work 剩餘空間
+# 例：--params 604 --precision fp8 --active 27 --extra-gb 20（--extra-gb＝多模態視覺塔等額外顯存）
+# 自動對照 4×H200 (564GB) / 8×H200 (1,128GB) / df 磁碟剩餘
 ```
-人工再加計：多模態視覺塔顯存、TP8/EP8 通訊緩衝（5-10%）、KV cache 預留（≥20-30%）。
+人工再加計：TP8/EP8 通訊緩衝（5-10%）、KV cache 預留（≥20-30%，腳本已含 25% 保守值）。
 
 ### Step 4：輸出評估報告（必含）
 - 框架建議（**附實測證據**：腳本輸出摘要）
@@ -61,5 +63,12 @@ description: >-
 # → 更新 engines/KNOWN_GOOD.md ＋ 本 skill README.md 的評估記錄表
 ```
 - 目錄命名：`sglang-<模型>-<精度>`；job-name 為底線版本
-- **VLM 模組煙霧驗證必加一筆帶圖片的請求**
+- **VLM 模組煙霧驗證必加一筆帶圖片的請求**（`validate_engine.sh` 只測文字，需手動補）：
+  ```bash
+  curl -s -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+    -d '{"model":"<MODEL_NAME>","messages":[{"role":"user","content":[
+      {"type":"image_url","image_url":{"url":"https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/p-blog/candy.JPG"}},
+      {"type":"text","text":"圖片裡是什麼動物？"}]}],"max_tokens":64}' \
+    "http://<引擎IP>:<PORT>/v1/chat/completions"
+  ```
 - `--trust-remote-code` 僅用於官方／可信任 repo（鏡像需核對出處）

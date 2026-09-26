@@ -3,8 +3,9 @@
 > **SKILL.md**＝AI 載入的技能指令（含觸發描述）；本 README＝人類說明文件。
 > 附屬執行工具：`scripts/check_engine_support.sh`（引擎支援＋parser 合法選項實測）、
 > `scripts/estimate_fit.py`（記憶體／磁碟適配估算）。
-> v1.2（2026-09-26）：遷移至 `.claude/skills/`（agent 標準載入位置，`.agents/skills/`
-> 以 symlink 同步）、SKILL.md 與 README.md 分離、診斷指令工具化。
+> v1.3（2026-09-26）：落腳 `.agents/skills/`（opencode 等 agent 之標準掃描位置，
+> 供應商中立）；日後若需 Claude Code，加一條 symlink 即可：
+> `mkdir -p .claude/skills && ln -s ../../.agents/skills/model-onboarding .claude/skills/`。
 
 ## 使用者端：自然語言 Prompt 範例
 
@@ -50,10 +51,10 @@ https://huggingface.co/A/model-1  和  https://huggingface.co/B/model-2
 
 ```bash
 # 引擎支援實測（三 image 模型檔 + reasoning-parser 合法選項）
-.claude/skills/model-onboarding/scripts/check_engine_support.sh step
+.agents/skills/model-onboarding/scripts/check_engine_support.sh step
 
 # 硬體適配估算（權重 × 精度 vs 4×/8×H200 與 /work 磁碟）
-.claude/skills/model-onboarding/scripts/estimate_fit.py --params 604 --precision fp8 --active 27
+.agents/skills/model-onboarding/scripts/estimate_fit.py --params 604 --precision fp8 --active 27
 ```
 
 ## 已完成的評估記錄

@@ -27,7 +27,7 @@ description: >-
 ### Step 2：實測引擎支援（跑腳本，別徒手）
 ```bash
 # 於 repo 根目錄執行（或改用絕對路徑 /path/to/work/github/litellm-proxy/...）
-.claude/skills/model-onboarding/scripts/check_engine_support.sh <架構關鍵字>
+.agents/skills/model-onboarding/scripts/check_engine_support.sh <架構關鍵字>
 # 檢查三個現有 image (sglang 0.5.19/0.5.20, vllm 0.29.1rc1) 的模型檔
 # ＋ reasoning-parser 合法選項 (DetectorMap)
 ```
@@ -37,7 +37,7 @@ description: >-
 
 ### Step 3：硬體適配計算（跑腳本）
 ```bash
-.claude/skills/model-onboarding/scripts/estimate_fit.py --params <總參數B> --precision <bf16|fp8|int4>
+.agents/skills/model-onboarding/scripts/estimate_fit.py --params <總參數B> --precision <bf16|fp8|int4>
 # 例：--params 604 --precision fp8 --active 27 --extra-gb 20（--extra-gb＝多模態視覺塔等額外顯存）
 # 自動對照 4×H200 (564GB) / 8×H200 (1,128GB) / df 磁碟剩餘
 ```

@@ -74,7 +74,7 @@ cd /path/to/work/github/litellm-proxy
 
 > 💡 本 SOP 已 AI 技能化：貼上 HF 模型 URL 即可觸發自動評估（引擎支援實測、硬體適配、
 > 參數草案），經同意後自動建模——見
-> [`.claude/skills/model-onboarding/`](../.claude/skills/model-onboarding/README.md)。
+> [`.agents/skills/model-onboarding/`](../.agents/skills/model-onboarding/README.md)。
 
 ```bash
 # ① 從最接近的原型 scaffold（原型特性見 KNOWN_GOOD.md 總覽表）

@@ -50,7 +50,7 @@ cd ../.. && ./validate_engine.sh <新引擎>             # 兩階段驗證
 
 ### 範例 3：只問可行性
 ```
-https://huggingface.co/deepseek-ai/DeepSeek-V5 這個模型
+https://huggingface.co/zai-org/GLM-5.3-Flash 這個模型
 我們四張 H200 放不放得下？記憶體幫我算一下
 ```
 

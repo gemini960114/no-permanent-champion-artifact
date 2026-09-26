@@ -276,3 +276,72 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
 | `bench_27b_500_users.json` | 27B 單卡基線 |
 | `bench_mixed_1500_users_via_tunnel.json` / `_bypass_tunnel.json` | 混合負載瓶頸定位對照 |
 | `bench_mixed_1500_users_sshd_fd_fixed.json` | sshd fd 修復後驗證輪（經隧道 100%，歸因修正的證據） |
+
+## ⚔️ SGLang vs vLLM 同模型 A/B 對決（2026-09-27）
+
+**動機**：vLLM 引擎路徑自專案成立從未實測（舊 `vllm-deepseek-flash` 原型無憑無據已刪），
+以本地既有 Qwen3.8-27B BF16 權重（52GB，零下載）建立 `engines/vllm-qwen27b` 對照組，
+與 `sglang-qwen-27b` 進行**科學對決**。
+
+### 🎯 對決條件（嚴格公平）
+
+| 項目 | 設定 |
+| :--- | :--- |
+| 權重 | **同一份** `/path/to/work/models/Qwen3.8-27B`（BF16） |
+| 硬體 | 各 1×H200（同節點同時段依序測） |
+| 參數來源 | **雙方官方文件**：SGLang Cookbook（docs.sglang.io）vs vLLM Recipe（recipes.vllm.ai） |
+| R1 併發 | SGLang cap 128（官方公式 `MAX_MAMBA_CACHE_SIZE=640`=128×5＋bf16 狀態）vs vLLM `--max-num-seqs 128` |
+| 負載 | 500 人併發 × max_tokens 500，經正式隧道路徑（VM → Gateway → 引擎） |
+| 工作量確認 | 兩輪總 tokens 207,832 vs 207,638（±0.1%＝同題同工作量） |
+
+### 📈 R1 陽春版（無投機解碼，生產推薦配置）
+
+| 指標 | SGLang 0.5.20 | vLLM 0.29.1rc1 | 勝負 |
+| :--- | :--- | :--- | :--- |
+| 成功率 | 100%（500/500） | 100%（500/500） | 平手 |
+| 聚合吞吐 | **3,823 tok/s** | 3,597 tok/s | **SGLang +6.3%** |
+| P95 延遲 | **51.8s** | 54.6s | SGLang 快 5.1% |
+| 總時長 | 54.4s | 57.7s | SGLang 快 5.7% |
+
+### 📈 R2 投機解碼全力版（同一顆 checkpoint 內建 MTP head）
+
+| 指標 | SGLang EAGLE 3/1/4 | vLLM MTP×3 |
+| :--- | :--- | :--- |
+| 併發上限 | **48**（記憶體所限，見下） | 128（MTP 共享權重幾乎免費） |
+| 聚合吞吐 | 2,306 tok/s（**-40%** vs 自身 R1） | 3,034 tok/s（**-16%** vs 自身 R1） |
+| P95 延遲 | 87.2s | 64.4s |
+
+### 💡 工程解讀
+
+1. **R1：SGLang 以 ~6% 小勝**——同權重同硬體同併發下，SGLang 的 scheduler／kernel
+   組合在 27B dense 混合架構上略佔優勢；但差距不大，兩框架都是一線水準。
+2. **R2：雙雙變慢，物理定律勝出**——500 人高併發下 decode batch 已達算力飽和，
+   投機解碼的 draft＋verify 是純開銷（acceptance 增益無法彌補）。**MTP/EAGLE 是
+   低併發延遲武器，不是高併發吞吐武器**。與 flash 引擎 NEXTN（1000 人壓測效益
+   為正）的差異在於該模型 MoE 結構解碼成本低、batch 空間大。
+3. **框架實作差異實證**：SGLang EAGLE 需額外載入 draft 權重＋GDN 中間狀態快取
+   （`intermediate_ssm_state_cache` 13.8GB）→ 記憶體預算擠壓併發至 48；
+   vLLM MTP 直接用主模型 checkpoint 內建 head，共享權重、cap 128 不變。
+   **混合線性注意力（GDN）模型的投機解碼記憶體代價，SGLang 遠高於 vLLM。**
+4. **生產配置定案＝R1 陽春版**（兩引擎投機解碼參數已註解保留於 config.env，
+   供未來低併發場景或單流延遲優化使用）。
+
+### 📁 本輪原始數據
+
+| 檔案 | 情境 |
+| :--- | :--- |
+| `bench_ab_sglang_27b_r1.json` / `bench_ab_vllm_27b_r1.json` | R1 陽春版對決 |
+| `bench_ab_sglang_27b_r2_eagle.json` / `bench_ab_vllm_27b_r2_mtp.json` | R2 投機解碼對決 |
+
+### 🔧 過程中修復的基礎設施問題（本輪除錯收穫）
+
+- **`git rm` 不會刪除 gitignore 的檔案**：刪除 `vllm-deepseek-flash` 引擎後，
+  `config.env`（金鑰檔）殘留成「殭屍引擎目錄」，仍被 `start.sh` 金鑰載入邏輯
+  依字母序掃到（`vllm-deepseek` < `vllm-qwen27b`）→ **舊金鑰覆蓋新引擎金鑰**
+  → generator 探測 401 → 端點被略過、路由缺席。教訓：**刪除引擎務必
+  `git rm -r` 後再 `rm -rf` 目錄**（或 `git clean`），並重啟 gateway 驗證
+  「活躍後端」數量。
+- **generator 探測加強**：`is_endpoint_alive` 失敗後重試一次＋輸出失敗原因
+  （HTTP status／例外），冷啟動首測逾時不再誤殺端點。
+- **驗證器模型名相容**：`validate_engine.sh` 改以 `/v1/models` 實際服務名做
+  chat 測試（vLLM 嚴格把關服務名＝權重路徑；SGLang 寬鬆放行——統一探測相容兩框架）。

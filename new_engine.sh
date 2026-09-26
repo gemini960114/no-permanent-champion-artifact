@@ -17,7 +17,7 @@ ENGINE_ROOT="$DIR/engines"
 ARCHETYPES=(
     "sglang-qwen-27b:小模型單卡 (TP1，支援多實例負載平衡)"
     "sglang-qwen-flash:大模型 TP4+EP4+NEXTN 投機解碼 (hybrid Mamba)"
-    "vllm-deepseek-flash:vLLM TP2 + FlashInfer MLA Sparse + CPU offload"
+    "vllm-qwen27b:vLLM 官方 Recipe 參數 (TP1，SGLang vs vLLM A/B 對照組)"
 )
 
 list_archetypes() {

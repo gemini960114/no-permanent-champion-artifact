@@ -13,9 +13,9 @@
 
 | 引擎目錄 | 模型 | 框架 / 實測版本 | image (SIF) | 權重大小 | 硬體 | 驗證狀態 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
-| `sglang-qwen-27b` | Qwen/Qwen3.8-27B-FP8 | SGLang **0.5.19** | `sglang_latest.sif` | 52 GB | 1×H200 (TP1) | ✅ 運行中 (2026-09-26) |
+| `sglang-qwen-27b` | Qwen/Qwen3.8-27B-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif`（共用） | 52 GB | 1×H200 (TP1) | ✅ 運行中；A/B R1 冠軍 3,823 tok/s（2026-09-27） |
 | `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 1000 人壓測通過 (2026-09-25) |
-| `vllm-deepseek-flash` | deepseek-ai/DeepSeek-V4.1-Flash | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 763 GB (**未下載**) | 2×H200 (TP2) | ⚪ 未驗證（權重未下載） |
+| `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
 | `sglang-step5-fp8` | TypeSafeAI/Step-5-Preview-FP8 | SGLang **0.5.20**（原生 step3p5 支援） | `sglang_flash_latest.sif`（共用） | ~604 GB (**FP8 未釋出**) | 8×H200 (TP8+EP8) | 🟡 準備中（BF16 1.21TB 超出硬體已排除；FP8 釋出後即可上線） |
 | `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
 
@@ -29,11 +29,13 @@
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `sglang_latest.sif`（docker `lmsysorg/sglang:latest`，SIF 轉檔 2026-09-05，內含 SGLang **0.5.19**） |
-| 權重 | `/path/to/work/models/Qwen3.8-27B`（52 GB） |
+| image | `sglang_flash_latest.sif`（SGLang **0.5.20**，2026-09-27 自 0.5.19 升級——官方 Cookbook 建議最新版） |
+| 權重 | `/path/to/work/models/Qwen3.8-27B`（52 GB，BF16） |
 | 平行 | TP=1（**支援同主機多實例**，埠 30000 起跳，LiteLLM 自動負載平衡） |
+| 基準參數 | 官方 SGLang Cookbook H200 單卡基準：kv fp8_e4m3、mem-fraction 0.85、flashinfer、chunked-prefill 32768、qwen3/qwen3_coder parser（7/7 與官方一致） |
+| 併發調校 | `MAX_MAMBA_CACHE_SIZE=640`（官方公式 128×5 slots）＋`MAMBA_SSM_DTYPE=bfloat16`（官方減半槓桿）＋`MAX_RUNNING_REQUESTS=128` → cap 128；官方預設 ratio 0.9 會壓到 44，不適合 500 人工作量 |
 | `HEALTH_TIMEOUT` | 600 秒（權重載入約 2~3 分鐘） |
-| 實績 | 早期 3 實例形態 500 人壓測 7,082 tok/s；2026-09-26 單實例經 `start_models.sh` 啟動驗證 |
+| 實績 | A/B R1 冠軍：500 人×500 tok 100%、**3,823 tok/s**、P95 51.8s（2026-09-27）；R2 EAGLE 3/1/4 投機解碼 -40%（2,306 tok/s）且 GDN 中間狀態快取 13.8GB 擠壓 cap 至 48——**高併發服務不開投機解碼**；舊配置（ratio 4.59、cap 76）為 2,584 tok/s。詳 `benchmarks/README.md` A/B 戰報 |
 
 ### 2. engines/sglang-qwen-flash（原型：大模型 TP4+EP4+投機解碼）
 
@@ -47,16 +49,17 @@
 | 其他 | chunked-prefill 8192、`HEALTH_TIMEOUT` 1800 秒（權重載入約 5~6 分鐘） |
 | 實績 | 1000 人 × 800 tokens：100% 成功、峰值 6,221 tok/s、P95 185 秒（2026-09-25，詳 `benchmarks/README.md`） |
 
-### 3. engines/vllm-deepseek-flash（原型：vLLM + CPU offload）
+### 3. engines/vllm-qwen27b（原型：vLLM 官方 Recipe）
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `vllm_latest.sif`（SIF 轉檔 2026-09-22，內含 vLLM **0.29.1rc1.dev452** 開發版） |
-| 權重 | `deepseek-ai/DeepSeek-V4.1-Flash`（763 GB，**尚未下載**） |
-| 平行 | TP=2 |
-| 特色參數 | FlashInfer MLA Sparse、Engram CPU offload（`--attention-config`/`--engram-config` 有設定才附加） |
-| `HEALTH_TIMEOUT` | 1800 秒（CPU offload 載入慢） |
-| 狀態 | ⚪ 啟動邏輯僅單元測試覆蓋；下載權重後以 `validate_engine.sh` 完成驗證並更新本表 |
+| image | `vllm_latest.sif`（SIF 轉檔 2026-09-22，內含 vLLM **0.29.1rc1.dev452** 開發版；registry 實測已映射 `Qwen3_5ForConditionalGeneration → qwen3_5.py`） |
+| 權重 | `/path/to/work/models/Qwen3.8-27B`（52 GB，**與 sglang-qwen-27b 共享**，零下載） |
+| 平行 | TP=1（與 SGLang 27B 對等的 A/B 對決對照組，埠 36000） |
+| 基準參數 | 官方 vLLM Recipe（recipes.vllm.ai/Qwen/Qwen3.8-27B）：kv fp8、`--max-model-len 262144`、`--reasoning-parser qwen3`（官方明言不可省）、`--tool-call-parser qwen3_xml`、`--max-num-seqs 128`（與 SGLang R1 cap 對等） |
+| MTP | `SPECULATIVE_CONFIG={"method":"mtp","num_speculative_tokens":3}`（官方：checkpoint 內建 draft head；R2 實測高併發 -16%，config.env 已註解保留） |
+| `HEALTH_TIMEOUT` | 1800 秒 |
+| 狀態 | ✅ 2026-09-27 驗證 9/9 通過（validate_engine.sh 煙霧＋500 人壓測 100%）；A/B R1 對決 3,597 tok/s、P95 54.6s（SGLang 27B 以 6.3% 勝出）；MTP 與主模型共享權重，cap 128 不受投機解碼影響 |
 
 ### 4. engines/sglang-step5-fp8（原型：大模型 TP8+EP8 MoE）🟡 準備中
 

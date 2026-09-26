@@ -42,7 +42,7 @@ LiteLLM Gateway 採用**全自動動態端點註冊與健康探測機制**：
 | :--- | :--- | :--- | :--- |
 | `engines/sglang-qwen-27b/` | SGLang | Qwen/Qwen3.8-27B-FP8 | 30000+ |
 | `engines/sglang-qwen-flash/` | SGLang | Qwen/Qwen3.8-Flash-Next-FP8 | 32000+ |
-| `engines/vllm-deepseek-flash/`| vLLM | deepseek-ai/DeepSeek-V4.1-Flash | 33000+ |
+| `engines/vllm-qwen27b/` | vLLM | Qwen/Qwen3.8-27B-vLLM | 36000+ |
 | `vllm-llama-70b/` (自訂) | vLLM | meta-llama/Llama-3.3-70B-Instruct | 34000+ |
 
 ---
@@ -104,20 +104,20 @@ HEALTH_TIMEOUT=600
 
 ### 步驟 3：以 `vllm_server.slurm` 為範本修改 Slurm 腳本
 
-**請勿從空白腳本重寫**。直接複製最新的 [`engines/vllm-deepseek-flash/vllm_server.slurm`](../engines/vllm-deepseek-flash/vllm_server.slurm) 再修改——它已內建 `ENGINE_DIR` 寫入、`${SLURM_JOB_ID:-manual}` fallback、`HEALTH_TIMEOUT` 逾時自動退場與選用參數條件傳入，照抄才不會與函式庫實作脫節：
+**請勿從空白腳本重寫**。直接複製最新的 [`engines/vllm-qwen27b/vllm_server.slurm`](../engines/vllm-qwen27b/vllm_server.slurm) 再修改——它已內建 `ENGINE_DIR` 寫入、`${SLURM_JOB_ID:-manual}` fallback、`HEALTH_TIMEOUT` 逾時自動退場與選用參數條件傳入，照抄才不會與函式庫實作脫節：
 
 ```bash
-cp engines/vllm-deepseek-flash/vllm_server.slurm mymodel_server.slurm
+cp engines/vllm-qwen27b/vllm_server.slurm mymodel_server.slurm
 ```
 
 需要修改的位置只有以下幾處（其餘照抄）：
 
 | 修改處 | 範本中的值 | 說明 |
 | :--- | :--- | :--- |
-| `#SBATCH --job-name=` | `vllm_deepseek` | Slurm 作業名稱（同時用於 log 檔名） |
-| `WORK_DIR` fallback 路徑 | `/work/.../engines/vllm-deepseek-flash` | Slurm spool 環境下 `BASH_SOURCE` 指向 `/var/spool/slurmd`，需絕對路徑 fallback |
-| `ENGINE_NAME` | `vllm_deepseek` | 端點檔前綴：`runtime/endpoints/${ENGINE_NAME}_${SLURM_JOB_ID:-manual}.env` |
-| `ENDPOINT_REGISTRY_FILE` | `vllm_deepseek_${SLURM_JOB_ID:-manual}.env` | 與 `ENGINE_NAME` 保持一致 |
+| `#SBATCH --job-name=` | `vllm_qwen27b` | Slurm 作業名稱（同時用於 log 檔名） |
+| `WORK_DIR` fallback 路徑 | `/work/.../engines/vllm-qwen27b` | Slurm spool 環境下 `BASH_SOURCE` 指向 `/var/spool/slurmd`，需絕對路徑 fallback |
+| `ENGINE_NAME` | `vllm_qwen27b` | 端點檔前綴：`runtime/endpoints/${ENGINE_NAME}_${SLURM_JOB_ID:-manual}.env` |
+| `ENDPOINT_REGISTRY_FILE` | `vllm_qwen27b_${SLURM_JOB_ID:-manual}.env` | 與 `ENGINE_NAME` 保持一致 |
 | `API_KEY_ENV`（於 `config.env`） | `VLLM_API_KEY` | 引擎鑑權金鑰的變數名（解析規則見步驟 2） |
 | `CMD=( ... )` 啟動指令 | `vllm serve "$RESOLVED_MODEL_PATH" ...` | 換成新引擎的啟動指令；選用參數比照 `--api-key` 的條件附加寫法，變數為空時勿傳旗標 |
 
@@ -155,7 +155,7 @@ bash submit_slurm.sh
 作業啟動並通過健康檢查後：
 1. 檢視端點狀態（檔名依 `ENGINE_NAME` 命名）：
    ```bash
-   cat runtime/endpoints/vllm_deepseek_<JOB_ID>.env
+   cat runtime/endpoints/vllm_qwen27b_<JOB_ID>.env
    # 應顯示 STATE=ready
    ```
 2. LiteLLM 透過 `generate_runtime_config.py` 自動讀取新端點：
@@ -182,5 +182,5 @@ bash submit_slurm.sh
 ## 6. 範例目錄對照
 
 - **SGLang 範例**：參考 [engines/sglang-qwen-27b/](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-27b) 或 [engines/sglang-qwen-flash/](file:///path/to/work/github/litellm-proxy/engines/sglang-qwen-flash)
-- **vLLM 範例**：參考 [engines/vllm-deepseek-flash/](file:///path/to/work/github/litellm-proxy/engines/vllm-deepseek-flash)
+- **vLLM 範例**：參考 [engines/vllm-qwen27b/](file:///path/to/work/github/litellm-proxy/engines/vllm-qwen27b)
 - **共用生命週期程式庫**：參考 [lib/lifecycle.sh](file:///path/to/work/github/litellm-proxy/lib/lifecycle.sh)

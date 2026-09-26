@@ -88,37 +88,6 @@ model_list:
       api_base: os.environ/SGLANG_FLASH_API_BASE
       api_key: os.environ/SGLANG_API_KEY
 
-  # 3. DeepSeek-V4.1-Flash (engines/vllm-deepseek-flash/)
-  - model_name: DeepSeek-V4-Flash
-    litellm_params:
-      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
-      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
-      api_key: dummy
-
-  - model_name: deepseek-v4-flash
-    litellm_params:
-      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
-      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
-      api_key: dummy
-
-  - model_name: deepseek-flash
-    litellm_params:
-      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
-      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
-      api_key: dummy
-
-  - model_name: vllm-deepseek-flash
-    litellm_params:
-      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
-      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
-      api_key: dummy
-
-  - model_name: deepseek-ai/DeepSeek-V4.1-Flash
-    litellm_params:
-      model: openai//path/to/work/models/DeepSeek-V4.1-Flash
-      api_base: os.environ/VLLM_DEEPSEEK_API_BASE
-      api_key: dummy
-
   # ==========================================
   # HPC 內部 GPU 叢集 (vLLM Deployments)
   # 說明：目前 gpu-node-1~4 服務離線中，暫時註解避免 /v1/models 導流失敗

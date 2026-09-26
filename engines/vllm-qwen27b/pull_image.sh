@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# vLLM DeepSeek-V4.1-Flash 推論容器映像檔拉取腳本 (pull_image.sh)
+# vLLM Qwen3.8-27B 推論容器映像檔拉取腳本 (pull_image.sh)
 # ==============================================================================
 umask 077
 set -euo pipefail
@@ -37,11 +37,11 @@ if [ -z "$PULL_BIN" ]; then
     exit 1
 fi
 
-# 預設採用 nightly 版本以支援 DeepSeek-V4.1-Flash 最新 MLA Sparse 與 Engram 特性
+# 預設採用 nightly 版本以支援 Qwen3.8-27B 最新 MLA Sparse 與 Engram 特性
 DOCKER_IMAGE="${1:-docker://vllm/vllm-openai:nightly}"
 
 echo "=========================================================="
-echo " 🚀 開始拉取並建構 vLLM 推論容器 (DeepSeek-V4.1-Flash)"
+echo " 🚀 開始拉取並建構 vLLM 推論容器 (Qwen3.8-27B)"
 echo " 🔹 工具路徑: $PULL_BIN"
 echo " 🔹 來源映像: $DOCKER_IMAGE"
 echo " 🔹 輸出目標: $TARGET_SIF"
@@ -53,4 +53,4 @@ echo "=========================================================="
 
 echo ""
 echo "✅ 容器拉取與轉換完成: $TARGET_SIF"
-echo "💡 可執行 ./submit_slurm.sh 啟動 vLLM DeepSeek-V4.1-Flash 服務"
+echo "💡 可執行 ./submit_slurm.sh 啟動 vLLM Qwen3.8-27B 服務"

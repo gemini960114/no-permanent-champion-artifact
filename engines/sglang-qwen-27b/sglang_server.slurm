@@ -182,12 +182,37 @@ CMD=(
     --max-prefill-tokens "${MAX_PREFILL_TOKENS:-32768}"
     --reasoning-parser "${REASONING_PARSER:-qwen3}"
     --tool-call-parser "${TOOL_CALL_PARSER:-qwen3_coder}"
-    --mamba-full-memory-ratio "${MAMBA_FULL_MEMORY_RATIO:-4.59}"
     --host "${HOST:-0.0.0.0}"
     --port "$PORT"
-    --mamba-radix-cache-strategy "${MAMBA_RADIX_CACHE_STRATEGY:-extra_buffer}"
-    --mamba-ssm-dtype "${MAMBA_SSM_DTYPE:-float32}"
 )
+
+# 可選參數：變數有設定時才附加旗標（官方 H200 基準命令不含 MAMBA 調校；
+# GDN 快取大小官方認可寫法為 --mamba-cache-size = 目標併發 × S，需要時於 config.env 設定）
+if [ -n "${MAX_RUNNING_REQUESTS:-}" ]; then
+  CMD+=(--max-running-requests "$MAX_RUNNING_REQUESTS")
+fi
+if [ -n "${MAMBA_FULL_MEMORY_RATIO:-}" ]; then
+  CMD+=(--mamba-full-memory-ratio "$MAMBA_FULL_MEMORY_RATIO")
+fi
+if [ -n "${MAX_MAMBA_CACHE_SIZE:-}" ]; then
+  CMD+=(--max-mamba-cache-size "$MAX_MAMBA_CACHE_SIZE")
+fi
+if [ -n "${MAMBA_RADIX_CACHE_STRATEGY:-}" ]; then
+  CMD+=(--mamba-radix-cache-strategy "$MAMBA_RADIX_CACHE_STRATEGY")
+fi
+if [ -n "${MAMBA_SSM_DTYPE:-}" ]; then
+  CMD+=(--mamba-ssm-dtype "$MAMBA_SSM_DTYPE")
+fi
+
+# 投機解碼（官方 EAGLE 3/1/4，使用 checkpoint 內建 MTP head；R2 壓測用）
+if [ -n "${SPECULATIVE_ALGORITHM:-}" ]; then
+  CMD+=(
+    --speculative-algorithm "$SPECULATIVE_ALGORITHM"
+    --speculative-num-steps "${SPECULATIVE_NUM_STEPS:-3}"
+    --speculative-eagle-topk "${SPECULATIVE_EAGLE_TOPK:-1}"
+    --speculative-num-draft-tokens "${SPECULATIVE_NUM_DRAFT_TOKENS:-4}"
+  )
+fi
 
 if [ -n "${SGLANG_API_KEY:-}" ]; then
   echo "🔒 SGLang API Key 鑑權保護已啟用"

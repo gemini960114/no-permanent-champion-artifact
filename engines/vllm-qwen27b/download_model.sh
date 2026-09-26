@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 模型權重下載腳本: DeepSeek-V4.1-Flash
+# 模型權重下載腳本: Qwen3.8-27B（與 sglang-qwen-27b 共享，常規無需下載）
 # ==============================================================================
 umask 077
 set -euo pipefail
@@ -11,7 +11,9 @@ if [ -f "$SCRIPT_DIR/config.env" ]; then
     source "$SCRIPT_DIR/config.env"
 fi
 
-MODEL_TARGET="${1:-${MODEL_NAME:-deepseek-ai/DeepSeek-V4.1-Flash}}"
+# 權重與 sglang-qwen-27b 共享；MODEL_NAME 带 -vLLM 後綴（Gateway 隔離用），實際下載對象為 FALLBACK_MODEL_NAME
+MODEL_TARGET="${1:-${FALLBACK_MODEL_NAME:-Qwen/Qwen3.8-27B}}"
+if [ -z "${1:-}" ] && [ -z "${FALLBACK_MODEL_NAME:-}" ]; then MODEL_TARGET="Qwen/Qwen3.8-27B"; fi
 TARGET_DIR="${MODELS_DIR:-/path/to/work/models}/$(basename "$MODEL_TARGET")"
 CACHE_DIR="${HF_CACHE_DIR:-/path/to/work/huggingface_cache}"
 

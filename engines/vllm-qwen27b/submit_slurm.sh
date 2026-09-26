@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# vLLM DeepSeek-V4.1-Flash SLURM 任務派送腳本 (submit_slurm.sh)
+# vLLM Qwen3.8-27B SLURM 任務派送腳本 (submit_slurm.sh)
 # ==============================================================================
 umask 077
 set -euo pipefail
@@ -92,7 +92,7 @@ if [ -n "$NODELIST" ]; then
 fi
 
 echo "=========================================================="
-echo " 🚀 準備派送 vLLM DeepSeek-V4.1-Flash 作業到 SLURM"
+echo " 🚀 準備派送 vLLM Qwen3.8-27B 作業到 SLURM"
 echo "=========================================================="
 echo " 🔹 計畫代號 (Account)   : $ACCOUNT"
 echo " 🔹 分區名稱 (Partition) : $PARTITION"

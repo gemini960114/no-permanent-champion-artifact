@@ -190,9 +190,14 @@ if [ "$STAGE" = "1" ] || [ "$STAGE" = "all" ]; then
             bad "/v1/models → HTTP $CODE"
         fi
 
+        # chat 測試模型名：以 /v1/models 實際服務名為準（vLLM 嚴格把關服務名=權重路徑，
+        # SGLang 雖寬鬆但統一探測可相容兩框架；探測失敗才退回 MODEL_NAME）
+        SMOKE_MODEL=$(python3 -c "import json; d=json.load(open('/tmp/validate_models.json')).get('data',[]); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+        SMOKE_MODEL="${SMOKE_MODEL:-$MODEL_NAME}"
+
         CHAT_CODE=$(curl -s -o /tmp/validate_chat.json -w "%{http_code}" -m 120 \
             -H "Authorization: Bearer ${KEY_VAL}" -H "Content-Type: application/json" \
-            -d "{\"model\": \"${MODEL_NAME}\", \"messages\": [{\"role\": \"user\", \"content\": \"回覆OK即可\"}], \"max_tokens\": 64}" \
+            -d "{\"model\": \"${SMOKE_MODEL}\", \"messages\": [{\"role\": \"user\", \"content\": \"回覆OK即可\"}], \"max_tokens\": 64}" \
             "$BASE/v1/chat/completions" 2>/dev/null || echo 000)
         if [ "$CHAT_CODE" = "200" ]; then
             REPLY=$(python3 -c "import json; print(json.load(open('/tmp/validate_chat.json'))['choices'][0]['message']['content'].strip()[:40])" 2>/dev/null || echo "?")

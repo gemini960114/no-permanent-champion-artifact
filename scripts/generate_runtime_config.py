@@ -151,25 +151,40 @@ def get_job_status(job_id: str) -> str:
     except Exception:
         return "UNKNOWN"
 
-def is_endpoint_alive(api_base: str, api_key: str, timeout: float = 2.5) -> bool:
+def is_endpoint_alive(api_base: str, api_key: str, timeout: float = 2.5, retries: int = 1) -> bool:
     """
     從登入節點主動向 SGLang /v1/models 發送 HTTP GET 請求。
     必須回傳 HTTP 200 且回應為合法 JSON (含有 data 或 object 欄位) 才認定存活。
+    引擎剛翻 ready 的首個遠端請求可能超過單次 timeout（冷啟動延遲，實測 vLLM
+    曾在 gateway 重啟競態中以 2.5s 逾時被誤判死亡），故失敗後重試一次。
     """
     if not api_base:
         return False
-    try:
-        url = f"{api_base.rstrip('/')}/models"
-        req = urllib.request.Request(url)
-        if api_key:
-            req.add_header("Authorization", f"Bearer {api_key}")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            if resp.status != 200:
-                return False
-            payload = json.loads(resp.read().decode("utf-8"))
-            return isinstance(payload, dict) and ("data" in payload or "object" in payload)
-    except Exception:
-        return False
+    url = f"{api_base.rstrip('/')}/models"
+    last_err = ""
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url)
+            if api_key:
+                req.add_header("Authorization", f"Bearer {api_key}")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status != 200:
+                    last_err = f"HTTP {resp.status}"
+                else:
+                    try:
+                        payload = json.loads(resp.read().decode("utf-8"))
+                        if isinstance(payload, dict) and ("data" in payload or "object" in payload):
+                            return True
+                        last_err = f"JSON 格式不符: {str(payload)[:80]}"
+                    except json.JSONDecodeError as je:
+                        last_err = f"JSON 解析失敗: {je}"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {e}"
+        if attempt < retries:
+            time.sleep(1.5)
+            continue
+    print(f"   ⛔ 探測失敗 {url} → {last_err}", file=sys.stderr)
+    return False
 
 def parse_env_file(filepath: str) -> dict:
     """解析 KEY=VALUE 格式環境變數檔"""
@@ -382,8 +397,14 @@ def main():
             names_to_register.append(ep["model_alias"])
 
         # 智慧別名映射庫 (自動補齊常用代號與簡稱)
+        # A0. Qwen 27B vLLM 對照組（A/B 測試命名空間隔離；必須優先於一般 Qwen 27B 規則，
+        #     否則 -vLLM 後綴名會落入 A 規則、與 SGLang 27B 共用別名導致負載混合）
+        if any("vllm" in n.lower() for n in names_to_register) and any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+            for std_name in ("Qwen3.8-27B-vLLM", "vllm-qwen-27b", "Qwen/Qwen3.8-27B-vLLM"):
+                if std_name not in names_to_register:
+                    names_to_register.append(std_name)
         # A. Qwen 27B 系列
-        if any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+        elif any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
             for std_name in ("Qwen3.8-27B", "qwen3.8", "qwen-27b", "sglang-qwen-27b", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B"):
                 if std_name not in names_to_register:
                     names_to_register.append(std_name)

@@ -397,10 +397,14 @@ def main():
             names_to_register.append(ep["model_alias"])
 
         # 智慧別名映射庫 (自動補齊常用代號與簡稱)
-        # A0. Qwen 27B vLLM 對照組（A/B 測試命名空間隔離；必須優先於一般 Qwen 27B 規則，
-        #     否則 -vLLM 後綴名會落入 A 規則、與 SGLang 27B 共用別名導致負載混合）
-        if any("vllm" in n.lower() for n in names_to_register) and any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
-            for std_name in ("Qwen3.8-27B-vLLM", "vllm-qwen-27b", "Qwen/Qwen3.8-27B-vLLM"):
+        # A0. vLLM 對照組（A/B 測試命名空間隔離；必須優先於一般 Qwen 規則，
+        #     否則 -vLLM 後綴名會落入 A/B 規則、與 SGLang 引擎共用別名導致負載混合）
+        if any("vllm" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+            if any("flash" in n.lower() for n in names_to_register):
+                vllm_std_names = ("Qwen3.8-Flash-Next-vLLM", "qwen-flash-vllm", "vllm-flash-next", "Qwen/Qwen3.8-Flash-Next-vLLM")
+            else:
+                vllm_std_names = ("Qwen3.8-27B-vLLM", "vllm-qwen-27b", "Qwen/Qwen3.8-27B-vLLM")
+            for std_name in vllm_std_names:
                 if std_name not in names_to_register:
                     names_to_register.append(std_name)
         # A. Qwen 27B 系列

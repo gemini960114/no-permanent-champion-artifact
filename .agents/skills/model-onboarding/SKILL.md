@@ -22,7 +22,13 @@ description: >-
 
 ### Step 1：收集模型事實（抓 model card）
 必查：總參數／激活參數（MoE?）、精度與檔案大小、架構（dense／MoE／hybrid mamba／
-**VLM**）、context length、**是否 gated（HF 條款）**、官方部署指令（僅供參考）、License 限制。
+**VLM**）、context length、**是否 gated（HF 條款）**、License 限制。
+
+**官方部署文件是第一優先參數來源**（實錄兩戰 A/B 全靠它）：model card 的
+「Serving / Deploy」章節會給 **SGLang Cookbook**（docs.sglang.io/cookbook/...）與
+**vLLM Recipe**（recipes.vllm.ai/...）連結——**先抓這兩份官方文件抄參數，不要自己猜**
+（實錄：vLLM Recipe 明載 Flash-Next「純 TP 與 FP8 128-寬量化塊不相容，必須 TEP」、
+「max-num-seqs 低於 256 會啟動錯誤」、「MTP 於 H100 實測變慢勿開」——三個地雷全靠文件避開）。
 
 ### Step 2：實測引擎支援（跑腳本，別徒手）
 ```bash
@@ -48,7 +54,11 @@ description: >-
 - 記憶體計算表、image 版本
 - 啟動參數草案：TP/EP、context-length 現實值（官方值通常是理想值）、
   reasoning-parser（**實測合法值**）、MAX_RUNNING_REQUESTS 初始 64、HEALTH_TIMEOUT
-- 埠位分配（以各引擎 config.env 為準；現用：27b=30000、flash=32000、step5=34000、glm53=35000、vllm-qwen27b=36000）
+- 埠位分配（以各引擎 config.env 為準；現用：27b=30000、flash=32000、step5=34000、glm53=35000、vllm-qwen27b=36000、vllm-flash-next=37000）
+- **雙框架都支援時，建議兩個都建對照組實測再選**（engines/ 已有四個有憑有據範本：
+  `sglang-qwen-27b`／`vllm-qwen27b`（dense 單卡型）、`sglang-qwen-flash`／
+  `vllm-flash-next`（MoE TEP4 型）——A/B 兩戰實證**框架優勢隨架構翻轉**：
+  27B dense → SGLang 勝 6%；Flash-Next MoE → vLLM 勝 2.33×。不實測無法預知）
 - **不部署替代方案**（官方 API）與成本預估（下載時間／磁碟／GPU 時數）
 
 ### Step 5：等待明確同意 ⚠️（見鐵律 2）

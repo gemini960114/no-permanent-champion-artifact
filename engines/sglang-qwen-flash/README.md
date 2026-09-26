@@ -2,6 +2,12 @@
 
 本目錄提供基於 **SGLang** 框架的高效推論部署方案，專門用於在 4 張 NVIDIA H200 GPU 上運行 `Qwen/Qwen3.8-Flash-Next-FP8`。
 
+> **實績（2026-09-27 SGLang vs vLLM A/B 第二戰）**：各自最佳配置（NEXTN 3/1/4、cap 256）
+> 1000 人×800 tok 壓測 100%／**3,925 tok/s**／P95 129.7s——敗 vLLM 對照組
+> （[`engines/vllm-flash-next`](../vllm-flash-next/)，R1 陽春 7,886 tok/s）**2.01×**；
+> NEXTN 投機解碼 +16%（MoE 解碼便宜，投機有效）。完整戰報見
+> [`benchmarks/README.md`](../../benchmarks/README.md)。
+
 ---
 
 ## 🚀 核心規格與技術特色

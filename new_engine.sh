@@ -18,6 +18,7 @@ ARCHETYPES=(
     "sglang-qwen-27b:小模型單卡 (TP1，支援多實例負載平衡)"
     "sglang-qwen-flash:大模型 TP4+EP4+NEXTN 投機解碼 (hybrid Mamba)"
     "vllm-qwen27b:vLLM 官方 Recipe 參數 (TP1，SGLang vs vLLM A/B 對照組)"
+    "vllm-flash-next:vLLM TEP4 官方 Recipe MoE 配方 (A/B 第二戰冠軍 7,886 tok/s)"
 )
 
 list_archetypes() {

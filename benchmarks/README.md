@@ -345,3 +345,60 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
   （HTTP status／例外），冷啟動首測逾時不再誤殺端點。
 - **驗證器模型名相容**：`validate_engine.sh` 改以 `/v1/models` 實際服務名做
   chat 測試（vLLM 嚴格把關服務名＝權重路徑；SGLang 寬鬆放行——統一探測相容兩框架）。
+
+## ⚔️ SGLang vs vLLM 同模型 A/B 對決・第二戰：Qwen3.8-Flash-Next（2026-09-27）
+
+**動機**：27B 戰（SGLang 勝 6%）之後，於 qwen4_exp 新架構（GDN＋QSA＋51B N-gram
+embedding＋512 專家 ultra-sparse MoE，180B 總參／6B 激活）上再戰——新增
+`engines/vllm-flash-next`（TP4+EP4/TEP4、埠 37000），與 `sglang-qwen-flash`
+共享本地 FP8 權重（173GB，零下載），參數全依官方 vLLM Recipe（H200 章節）。
+
+### 🎯 對決條件
+
+| 項目 | 設定 |
+| :--- | :--- |
+| 權重 | **同一份** `Qwen3.8-Flash-Next-FP8`（173GB） |
+| 硬體 | 各 4×H200（TP4+EP4） |
+| 併發 | **雙邊 cap 256**（vLLM Recipe 明訂 `--max-num-seqs 256`，低了會啟動錯誤；SGLang `MAX_RUNNING_REQUESTS=256` 對齊） |
+| 負載 | 1000 人併發 × max_tokens 800（對齊 flash 生產基線），經正式隧道 |
+| 工作量確認 | 各輪 516k~525k tokens（±0.8%＝同題同工作量） |
+
+### 📈 結果（四宮格）
+
+| 配置 | SGLang 0.5.20 | vLLM 0.29.1rc1 | 勝負 |
+| :--- | :--- | :--- | :--- |
+| R1 陽春（無投機） | 3,383 tok/s¹／P95 150.6s | **7,886 tok/s／P95 63.2s** | **vLLM 2.33×** |
+| R2 投機解碼 | 3,925（NEXTN 3/1/4，**+16%**）² | 4,282（MTP×3，**-46%**） | vLLM +9% |
+| **各自最佳** | 3,925（開 NEXTN） | **7,886（不開 MTP）** | **vLLM 2.01×** |
+
+¹ SGLang R1 先以預設（PLE 卸載 CPU）測得 3,296 tok/s，改 `--no-ple-offload-embedding`
+（51B N-gram embedding 留 GPU，對齊 vLLM 記憶體策略）後 3,383——**PLE 策略只值 2.6%**，
+非差距主因。
+² 兩輪成功率均 100%（1000/1000）。
+
+### 💡 工程解讀
+
+1. **與 27B 戰完全相反的結局**：27B（dense）SGLang 勝 6%；Flash-Next（ultra-sparse MoE）
+   vLLM 勝 2.33×。**框架優勢隨架構翻轉**——qwen4_exp 是新架構，vLLM 的 triton MoE＋
+   FP8 pipeline 成熟度明顯領先（我們的 vLLM image 0.29.1rc1 比 SGLang 0.5.20 對此架構
+   更新）。
+2. **投機解碼效應兩框架方向相反**（同一模型、同顆 MTP head）：
+   - SGLang NEXTN **+16%**（MoE 6B 激活解碼便宜，draft 划算——與其生產調優經驗一致）
+   - vLLM MTP **-46%**（與官方 Recipe 於 H100 的警告一致：acceptance ~36%、
+     「do not enable by default」）
+   - **同一顆 draft head，兩種框架實作，一個賺一個賠**——投機解碼的成敗在實作品質，
+     不在模型本身。
+3. **PLE（51B N-gram embedding）記憶體策略**：SGLang 預設卸載 CPU、vLLM 於 H200 放
+   GPU——實測差異僅 2.6%，非主因。
+4. **生產建議**：flash 產線若切至 vllm-flash-next（R1 陽春配置），吞吐可較現行
+   SGLang 最佳配置（3,925）提升 **~2.0×**（7,886）——待決策。
+
+### 📁 本輪原始數據
+
+| 檔案 | 情境 |
+| :--- | :--- |
+| `bench_ab_sglang_flash_r1.json` | SGLang R1（PLE 卸載 CPU，預設） |
+| `bench_ab_sglang_flash_r1b_ple_gpu.json` | SGLang R1（PLE 留 GPU，對齊 vLLM 策略） |
+| `bench_ab_sglang_flash_r2.json` | SGLang R2（NEXTN 3/1/4） |
+| `bench_ab_vllm_flash_r1.json` | vLLM R1（陽春，=其最佳配置） |
+| `bench_ab_vllm_flash_r2.json` | vLLM R2（MTP×3） |

@@ -143,6 +143,8 @@ curl -s -H "Authorization: Bearer <虛擬金鑰>" http://localhost:54921/v1/mode
 | :--- | :--- | :--- | :--- |
 | 2026-09-26 | [Step-5-Preview-BF16](https://huggingface.co/TypeSafeAI/Step-5-Preview-BF16) | 🟡 BF16（1.21TB）超出 8×H200 與磁碟；FP8＋8×H200 可行（SGLang **0.5.20** 原生支援 step3p5；⚠️ model card 的 `--reasoning-parser stepfun` 實測不存在，正確值 `step3p5`） | `engines/sglang-step5-fp8/`（等待 FP8 釋出） |
 | 2026-09-26 | [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) | ✅ 可行：328.3GB 原生 FP8＋8×H200 官方配方（SGLang **0.5.20** 原生 glm5_next；glm45/glm47 parser、tilelang、deep_gemm、EAGLE 全數實測在 image 內；H200 無 4-GPU 配方） | `engines/sglang-glm53-flash/`（✅ 已上線，VLM 帶圖驗證通過） |
+| 2026-09-27 | [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B)（A/B 第一戰） | ✅ 雙框架對決：SGLang 3,823 勝 vLLM 3,597 tok/s（+6.3%）；EAGLE/MTP 投機解碼雙雙變慢（高併發不開）——dense 模型 SGLang 略優 | `engines/vllm-qwen27b/`（✅ 對照組上線） |
+| 2026-09-27 | [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next)（A/B 第二戰） | ✅ 雙框架對決（qwen4_exp 新架構）：**vLLM R1 陽春 7,886 tok/s 碾壓 SGLang 最佳 3,925（2.01×）**；投機解碼效應相反（SGLang NEXTN +16%／vLLM MTP -46%）——**框架優勢隨架構翻轉，新架構必須雙框架實測**；vLLM Recipe 地雷（純 TP 不相容 FP8 量化塊、max-num-seqs≥256、MTP 勿開）全靠官方文件避開 | `engines/vllm-flash-next/`（✅ 冠軍上線，TEP4） |
 
 ## 相關文件
 

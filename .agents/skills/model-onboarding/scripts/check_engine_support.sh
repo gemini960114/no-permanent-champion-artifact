@@ -32,7 +32,7 @@ echo "── vllm_latest (vLLM)："
 if [ -f "$CONTAINERS/vllm_latest.sif" ]; then
     VER=$(timeout 60 apptainer exec "$CONTAINERS/vllm_latest.sif" python3 -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "?")
     MATCHES=$(timeout 60 apptainer exec "$CONTAINERS/vllm_latest.sif" \
-        bash -c "ls /vllm-workspace/vllm/model_executor/models/ 2>/dev/null | grep -i '$KEYWORD'" 2>/dev/null)
+        bash -c "ls /usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/ /usr/local/lib/python3.12/dist-packages/vllm/models/ 2>/dev/null | grep -i '$KEYWORD'" 2>/dev/null)
     echo "   版本: vLLM $VER"
     if [ -n "$MATCHES" ]; then echo "$MATCHES" | sed 's/^/   ✅ /'; else echo "   ❌ 無匹配"; fi
 else

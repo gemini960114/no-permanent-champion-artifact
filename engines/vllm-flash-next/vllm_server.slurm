@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==============================================================================
-# SLURM 核心派送腳本: SGLang Qwen3.8-Flash-Next on 4x H200 GPU (TP=4, EP=4)
+# SLURM 核心派送腳本: vLLM Qwen3.8-Flash-Next on 4x H200 GPU (TEP4)
 # ==============================================================================
-#SBATCH --job-name=sglang_flash
+#SBATCH --job-name=vllm_flash_next
 #SBATCH --partition=8gpus
 #SBATCH --account=your-slurm-account
 #SBATCH --nodes=1
@@ -10,8 +10,8 @@
 #SBATCH --cpus-per-task=48
 #SBATCH --mem=240G
 #SBATCH --time=24:00:00
-#SBATCH --output=logs/sglang-flash-%x-%j.out
-#SBATCH --error=logs/sglang-flash-%x-%j.err
+#SBATCH --output=logs/vllm-flash-next-%x-%j.out
+#SBATCH --error=logs/vllm-flash-next-%x-%j.err
 
 umask 077
 set -eo pipefail
@@ -19,7 +19,7 @@ set -eo pipefail
 # 1. 確保工作目錄
 WORK_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 if [[ "$WORK_DIR" == *"/var/spool/slurmd"* ]] || [ ! -w "$WORK_DIR" ]; then
-    WORK_DIR="/path/to/work/github/litellm-proxy/engines/sglang-qwen-flash"
+    WORK_DIR="/path/to/work/github/litellm-proxy/engines/vllm-flash-next"
 fi
 cd "$WORK_DIR"
 mkdir -p -m 700 logs
@@ -50,25 +50,28 @@ if [ -z "$SINGULARITY_BIN" ]; then
     exit 1
 fi
 
-SIF_FILE="${SIF_PATH:-/path/to/work/containers/sglang_latest.sif}"
+SIF_FILE="${SIF_PATH:-/path/to/work/containers/vllm_latest.sif}"
 if [ ! -f "$SIF_FILE" ]; then
-    echo "❌ 錯誤：找不到容器映像檔 $SIF_FILE" >&2
-    exit 1
+    echo "⚠️ 提醒：容器映像檔 $SIF_FILE 尚未就緒，若使用 Docker/Apptainer 請確認映像檔路徑" >&2
 fi
 
-# 3. 檢查與解析模型權重路徑
-MODEL_DIR="${MODELS_DIR:-/path/to/work/models}"
-MODEL_TARGET="${MODEL_NAME:-Qwen/Qwen3.8-Flash-Next-FP8}"
+# 3. 檢查與解析模型權重路徑（CANDIDATES 陣列——與 validate_engine.sh 檢查邏輯一致）
 RESOLVED_MODEL_PATH=""
+CANDIDATES=(
+    "${MODELS_DIR:-/path/to/work/models}/$(basename "${MODEL_NAME:-Qwen/Qwen3.8-Flash-Next-vLLM}")"
+    "${MODELS_DIR:-/path/to/work/models}/${MODEL_NAME:-Qwen/Qwen3.8-Flash-Next-vLLM}"
+    "${MODELS_DIR:-/path/to/work/models}/$(basename "${FALLBACK_MODEL_NAME:-Qwen/Qwen3.8-Flash-Next-FP8}")"
+)
 
-if [ -d "$MODEL_DIR/$(basename "$MODEL_TARGET")" ]; then
-    RESOLVED_MODEL_PATH="$MODEL_DIR/$(basename "$MODEL_TARGET")"
-elif [ -d "$MODEL_DIR/$MODEL_TARGET" ]; then
-    RESOLVED_MODEL_PATH="$MODEL_DIR/$MODEL_TARGET"
-elif [ -n "${FALLBACK_MODEL_NAME:-}" ] && [ -d "$MODEL_DIR/$(basename "$FALLBACK_MODEL_NAME")" ]; then
-    RESOLVED_MODEL_PATH="$MODEL_DIR/$(basename "$FALLBACK_MODEL_NAME")"
-else
-    RESOLVED_MODEL_PATH="$MODEL_TARGET"
+for c in "${CANDIDATES[@]}"; do
+    if [ -d "$c" ]; then
+        RESOLVED_MODEL_PATH="$c"
+        break
+    fi
+done
+
+if [ -z "$RESOLVED_MODEL_PATH" ]; then
+    RESOLVED_MODEL_PATH="${MODEL_NAME:-Qwen/Qwen3.8-Flash-Next-vLLM}"
 fi
 
 # 4. 取得計算節點網路與端點註冊目錄
@@ -80,10 +83,10 @@ PORT_LOCKS_DIR="$PROJECT_ROOT/runtime/port-locks"
 mkdir -p -m 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR"
 chmod 700 "$REGISTRY_DIR" "$PORT_LOCKS_DIR" 2>/dev/null || true
 
-ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/sglang_flash_${SLURM_JOB_ID:-manual}.env"
-ENGINE_NAME="sglang_flash"
+ENDPOINT_REGISTRY_FILE="$REGISTRY_DIR/vllm_flash_next_${SLURM_JOB_ID:-manual}.env"
+ENGINE_NAME="vllm_flash_next"
 
-# 5. 載入通用生命週期函式庫 (優先使用頂層 lib/lifecycle.sh)
+# 5. 載入通用生命週期函式庫
 LIB_LIFECYCLE="${PROJECT_ROOT}/lib/lifecycle.sh"
 if [ ! -f "$LIB_LIFECYCLE" ]; then
     LIB_LIFECYCLE="$WORK_DIR/../../lib/lifecycle.sh"
@@ -91,7 +94,7 @@ fi
 source "$LIB_LIFECYCLE"
 
 # 6. 動態可用 Port 偵測與搶佔
-PORT_BASE="${PORT:-32000}"
+PORT_BASE="${PORT:-33000}"
 CURRENT_PORT_LOCK=""
 find_available_port "$PORT_BASE" 100
 
@@ -99,11 +102,11 @@ find_available_port "$PORT_BASE" 100
 trap cleanup_endpoint TERM INT EXIT
 
 echo "=================================================================="
-echo "🚀 SGLang Qwen3.8-Flash-Next 服務正在啟動"
+echo "🚀 vLLM Qwen3.8-Flash-Next 服務正在啟動"
 echo "=================================================================="
 echo "🔹 Job ID       : ${SLURM_JOB_ID:-N/A}"
 echo "🔹 執行節點     : $NODE_HOSTNAME ($NODE_IP)"
-echo "🔹 GPU 資源     : 4x H200 GPU (${SLURM_JOB_GPUS:-0})"
+echo "🔹 GPU 資源     : 4x H200 GPU (TEP4)"
 echo "🔹 模型路徑     : $RESOLVED_MODEL_PATH"
 echo "🔹 容器映像檔   : $SIF_FILE"
 echo "🔹 服務端點     : http://${NODE_HOSTNAME}:${PORT} (內網 IP: http://${NODE_IP}:${PORT})"
@@ -116,8 +119,8 @@ publish_endpoint "starting"
 # 背景非同步自檢健康檢查 (逾時 HEALTH_TIMEOUT 秒，預設 600，未就緒則主動終止釋放 GPU)
 (
     AUTH_HEADER=()
-    if [ -n "${SGLANG_API_KEY:-}" ]; then
-        AUTH_HEADER=(-H "Authorization: Bearer ${SGLANG_API_KEY}")
+    if [ -n "${VLLM_FLASH_API_KEY:-}" ]; then
+        AUTH_HEADER=(-H "Authorization: Bearer ${VLLM_FLASH_API_KEY}")
     fi
     HEALTH_TIMEOUT="${HEALTH_TIMEOUT:-600}"
     TMP_BODY=$(mktemp)
@@ -126,14 +129,14 @@ publish_endpoint "starting"
         sleep 2
         HTTP_CODE=$(curl -sS -m 4 -o "$TMP_BODY" -w "%{http_code}" "${AUTH_HEADER[@]}" "http://127.0.0.1:${PORT}/v1/models" 2>/dev/null || echo "000")
         if validate_health_response "$HTTP_CODE" "$TMP_BODY"; then
-            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] SGLang Flash 健康自檢通過 (Port $PORT HTTP 200/JSON 合規)，發布狀態為 ready"
+            echo "✅ [Job ${SLURM_JOB_ID:-N/A}] vLLM 健康自檢通過 (Port $PORT HTTP 200/JSON 合規)，發布狀態為 ready"
             publish_endpoint "ready"
             rm -f "$TMP_BODY"
             exit 0
         fi
     done
     rm -f "$TMP_BODY"
-    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] SGLang Flash 自檢逾時 (Port $PORT，逾時 ${HEALTH_TIMEOUT} 秒)，主動終止服務釋放 GPU 資源" >&2
+    echo "❌ [Job ${SLURM_JOB_ID:-N/A}] vLLM 自檢逾時 (Port $PORT，逾時 ${HEALTH_TIMEOUT} 秒)，主動終止服務釋放 GPU 資源" >&2
     # SERVER_PID 於本子殼啟動後才設定，子殼內拿不到；$$ 在子殼內即為主 shell 之 PID，
     # 對其送 TERM 可靠觸發 cleanup_endpoint trap (清理端點檔與 Port 鎖)
     if [ -n "${SLURM_JOB_ID:-}" ]; then
@@ -145,54 +148,39 @@ publish_endpoint "starting"
 ) &
 HEALTH_PID=$!
 
-# 啟動 SGLang Serve
+# 啟動 vLLM Serve 指令（參數依官方 Recipe：recipes.vllm.ai/Qwen/Qwen3.8-Flash-Next
+# 之 H200 章節——TEP + triton MoE；純 TP 與 FP8 128-寬量化塊不相容，必須開 EP）
 CMD=(
   "$SINGULARITY_BIN" exec
   --nv
   --bind /work:/work
   "$SIF_FILE"
-  /opt/sglang/bin/sglang serve
-    --trust-remote-code
-    --model-path "$RESOLVED_MODEL_PATH"
-    --tp "${TP:-4}"
-    --ep "${EP:-4}"
-    --mem-fraction-static "${MEM_FRACTION:-0.85}"
-    --chunked-prefill-size "${CHUNKED_PREFILL_SIZE:-8192}"
-    --linear-attn-prefill-backend "${LINEAR_ATTN_PREFILL_BACKEND:-flashinfer}"
-    --linear-attn-decode-backend "${LINEAR_ATTN_DECODE_BACKEND:-flashinfer}"
-    --linear-attn-verify-backend "${LINEAR_ATTN_VERIFY_BACKEND:-triton}"
-    --mamba-ssm-dtype "${MAMBA_SSM_DTYPE:-bfloat16}"
-    --reasoning-parser "${REASONING_PARSER:-auto}"
+  vllm serve "$RESOLVED_MODEL_PATH"
     --host "${HOST:-0.0.0.0}"
     --port "$PORT"
+    --tensor-parallel-size "${TENSOR_PARALLEL_SIZE:-4}"
+    --moe-backend "${MOE_BACKEND:-triton}"
+    --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION:-0.85}"
+    --max-num-seqs "${MAX_NUM_SEQS:-256}"
+    --enable-prefix-caching
+    --no-enable-flashinfer-autotune
+    --reasoning-parser "${REASONING_PARSER:-qwen3}"
+    --tool-call-parser "${TOOL_CALL_PARSER:-qwen3_coder}"
+    --enable-auto-tool-choice
 )
 
-# PLE（51B N-gram embedding）記憶體策略：SGLang 預設卸載 CPU（vLLM 於 H200 放 GPU）；
-# A/B 公平性：PLE_OFFLOAD_EMBEDDING=false 時留在 GPU（記憶體允許下較快）
-if [ "${PLE_OFFLOAD_EMBEDDING:-}" = "false" ]; then
-  CMD+=(--no-ple-offload-embedding)
-elif [ "${PLE_OFFLOAD_EMBEDDING:-}" = "true" ]; then
-  CMD+=(--ple-offload-embedding)
+# 可選參數：變數有設定時才附加旗標，避免傳入空字串導致 vLLM 啟動失敗
+# 專家平行（官方 Recipe：FP8 權重必須 TEP）
+if [ "${ENABLE_EXPERT_PARALLEL:-}" = "true" ]; then
+  CMD+=(--enable-expert-parallel)
+fi
+# 投機解碼（官方 MTP：內建 draft head；R2 壓測用）
+if [ -n "${SPECULATIVE_CONFIG:-}" ]; then
+  CMD+=(--speculative-config "$SPECULATIVE_CONFIG")
 fi
 
-# 投機解碼（NEXTN 3/1/4＝生產/R2 配置；A/B R1 陽春版時於 config.env 註解關閉）
-if [ -n "${SPECULATIVE_ALGORITHM:-}" ]; then
-  CMD+=(
-    --speculative-algorithm "$SPECULATIVE_ALGORITHM"
-    --speculative-num-steps "${SPECULATIVE_NUM_STEPS:-3}"
-    --speculative-eagle-topk "${SPECULATIVE_EAGLE_TOPK:-1}"
-    --speculative-num-draft-tokens "${SPECULATIVE_NUM_DRAFT_TOKENS:-4}"
-  )
-fi
-
-if [ -n "${SGLANG_API_KEY:-}" ]; then
-    CMD+=(--api-key "$SGLANG_API_KEY")
-fi
-
-# 併發上限：投機解碼 (NEXTN) 開啟時 sglang 預設會自動降為 48，
-# 設定 MAX_RUNNING_REQUESTS 可明確覆蓋（記憶體允許的前提下提高總吞吐）
-if [ -n "${MAX_RUNNING_REQUESTS:-}" ]; then
-    CMD+=(--max-running-requests "$MAX_RUNNING_REQUESTS")
+if [ -n "${VLLM_FLASH_API_KEY:-}" ]; then
+  CMD+=(--api-key "$VLLM_FLASH_API_KEY")
 fi
 
 # 顯示啟動指令時遮罩 --api-key 值，避免金鑰寫入 Slurm log

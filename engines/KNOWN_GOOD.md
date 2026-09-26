@@ -14,8 +14,9 @@
 | 引擎目錄 | 模型 | 框架 / 實測版本 | image (SIF) | 權重大小 | 硬體 | 驗證狀態 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
 | `sglang-qwen-27b` | Qwen/Qwen3.8-27B-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif`（共用） | 52 GB | 1×H200 (TP1) | ✅ 運行中；A/B R1 冠軍 3,823 tok/s（2026-09-27） |
-| `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 1000 人壓測通過 (2026-09-25) |
+| `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中；A/B 第二戰 3,925 tok/s（各自最佳，敗 vLLM 2.01×，2026-09-27） |
 | `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
+| `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議，2026-09-27） |
 | `sglang-step5-fp8` | TypeSafeAI/Step-5-Preview-FP8 | SGLang **0.5.20**（原生 step3p5 支援） | `sglang_flash_latest.sif`（共用） | ~604 GB (**FP8 未釋出**) | 8×H200 (TP8+EP8) | 🟡 準備中（BF16 1.21TB 超出硬體已排除；FP8 釋出後即可上線） |
 | `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
 
@@ -47,7 +48,7 @@
 | 投機解碼 | NEXTN（3 步預測、Eagle Top-K=1、4 draft tokens） |
 | `MAX_RUNNING_REQUESTS` | **100**（不設時 sglang 因投機解碼自動降 48；記憶體額度：Mamba 狀態池 1,603 槽、KV cache 425 萬 tokens） |
 | 其他 | chunked-prefill 8192、`HEALTH_TIMEOUT` 1800 秒（權重載入約 5~6 分鐘） |
-| 實績 | 1000 人 × 800 tokens：100% 成功、峰值 6,221 tok/s、P95 185 秒（2026-09-25，詳 `benchmarks/README.md`） |
+| 實績 | 1000 人 × 800 tokens：100% 成功、峰值 6,221 tok/s、P95 185 秒（2026-09-25）；A/B 第二戰（2026-09-27，cap 256）：R1 陽春 3,383、R2 NEXTN 3,925 avg tok/s——各自最佳仍敗 vLLM 對照組 2.01×，詳 `benchmarks/README.md` 第二戰戰報 |
 
 ### 3. engines/vllm-qwen27b（原型：vLLM 官方 Recipe）
 
@@ -61,7 +62,20 @@
 | `HEALTH_TIMEOUT` | 1800 秒 |
 | 狀態 | ✅ 2026-09-27 驗證 9/9 通過（validate_engine.sh 煙霧＋500 人壓測 100%）；A/B R1 對決 3,597 tok/s、P95 54.6s（SGLang 27B 以 6.3% 勝出）；MTP 與主模型共享權重，cap 128 不受投機解碼影響 |
 
-### 4. engines/sglang-step5-fp8（原型：大模型 TP8+EP8 MoE）🟡 準備中
+### 4. engines/vllm-flash-next（原型：vLLM TEP4＋官方 Recipe MoE 配方）
+
+| 項目 | 值 |
+| :--- | :--- |
+| image | `vllm_latest.sif`（vLLM **0.29.1rc1.dev452**；registry 實測已映射 `Qwen4ExpForConditionalGeneration → vllm.models.qwen4_exp`＋`Qwen4ExpMTP`） |
+| 權重 | `/path/to/work/models/Qwen3.8-Flash-Next-FP8`（173 GB，**與 sglang-qwen-flash 共享**，零下載） |
+| 平行 | TP4＋`--enable-expert-parallel`（**TEP4——純 TP 與 FP8 128-寬量化塊不相容**，官方 Recipe 明載）＋`--moe-backend triton` |
+| 基準參數 | 官方 Recipe H200 章節：`--gpu-memory-utilization 0.85`、`--max-num-seqs 256`（低於此值 mamba-cache 啟動錯誤）、prefix caching、`--no-enable-flashinfer-autotune`、qwen3/qwen3_coder parser |
+| MTP | `SPECULATIVE_CONFIG`（R2 實測 **-46%**，與官方 H100 警告一致——**不建議開啟**，config.env 已註解保留） |
+| PLE | H200 放 GPU（`VLLM_PLE_CPU_OFFLOAD` 僅 H100 80GB 以下必須） |
+| `HEALTH_TIMEOUT` | 2400 秒（173GB 載入＋編譯） |
+| 狀態 | ✅ 2026-09-27 A/B 第二戰冠軍：1000 人×800 tok **100%／7,886 tok/s／P95 63.2s**（R1 陽春即各自最佳，勝 SGLang 最佳配置 2.01×） |
+
+### 5. engines/sglang-step5-fp8（原型：大模型 TP8+EP8 MoE）🟡 準備中
 
 | 項目 | 值 |
 | :--- | :--- |

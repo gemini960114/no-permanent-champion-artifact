@@ -101,6 +101,8 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 
 > 🛑 下線／重啟：`./stop_models.sh my-model` 一鍵停止；參數調整後以
 > `./validate_engine.sh my-model --fresh` 重新驗證再上線。
+> 📖 建模後的完整上線教學（config 欄位說明、HF_TOKEN 判斷、下載/驗證/驗收細節）
+> 見 [`.agents/skills/model-onboarding/README.md`](../.agents/skills/model-onboarding/README.md)〈上線五步教學〉。
 
 ### validate_engine.sh 兩階段說明
 

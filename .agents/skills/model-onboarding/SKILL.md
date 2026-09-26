@@ -72,3 +72,14 @@ description: >-
     "http://<引擎IP>:<PORT>/v1/chat/completions"
   ```
 - `--trust-remote-code` 僅用於官方／可信任 repo（鏡像需核對出處）
+
+### Step 7：建模完成後——帶使用者走「上線五步」教學
+
+模組建好 ≠ 上線。務必依 README.md 的〈上線五步教學〉帶使用者完成：
+① `config.env` 確認（金鑰沿用共用 `SGLANG_API_KEY`；**HF_TOKEN：gated 模型必須、
+非 gated 建議帶**——避免匿名限流，下載更穩）
+② 下載權重（`nohup` 背景執行；告知磁碟需求、預估時間與完成判斷）
+③ `./validate_engine.sh <引擎>`（VLM 模組含帶圖測試）
+④ `./start_models.sh <引擎>` 上線
+⑤ `./healthcheck.sh`＋外部路徑抽測驗收
+最後更新 KNOWN_GOOD 與本 skill 的評估記錄表。

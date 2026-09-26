@@ -82,6 +82,61 @@ https://huggingface.co/A/model-1  和  https://huggingface.co/B/model-2
 .agents/skills/model-onboarding/scripts/estimate_fit.py --params 604 --precision fp8 --active 27
 ```
 
+## 上線五步教學（模組建好之後）
+
+> 建模（Step 6）完成 ≠ 上線。以下是把一個新建引擎帶到正式服務的完整流程，
+> 在固定部署節點（現為 `login-2`）執行。實例對照：`engines/sglang-glm53-flash/`。
+
+### ① 確認 config.env
+
+```bash
+cd engines/<新引擎> && grep -vE "^#|^$" config.env   # 檢視非註解行
+```
+
+| 必看欄位 | 說明 |
+| :--- | :--- |
+| `MODEL_NAME` / `MODEL_ALIAS` | HF repo 名／對外別名（別名＝使用者請求時填的 model） |
+| `SIF_PATH` | image 路徑——共用 image 時**不要**跑 `pull_image.sh`（會覆蓋其他引擎的 image） |
+| `SGLANG_API_KEY` | 引擎內部金鑰——scaffold 時自動沿用共用值，通常不用動 |
+| `HF_TOKEN` | **gated 模型必須**（先去 HF 網頁接受條款）；**非 gated 建議帶**（避免匿名限流，大檔下載更穩）。scaffold 沿用前引擎的值 |
+| `TP`/`EP`/`PORT`/`MEM_FRACTION` | 評估報告建議值，通常已填好 |
+
+### ② 下載權重（背景執行）
+
+```bash
+cd engines/<新引擎>
+nohup ./download_model.sh <org>/<model> > download_<引擎>.log 2>&1 &
+tail -f download_<引擎>.log        # Ctrl+C 只離開檢視，不影響下載
+```
+- 磁碟：`--local-dir` 直落目標約 **1× 權重大小**；下載前 `df -h /path/to/work/models` 確認
+- 時間：視權重與吞吐而定（百 GB 級約 1~3 小時）
+- **完成判斷**：log 出現「✅ 模型下載完成」＋模型目錄有 `config.json`
+
+### ③ 驗證（不佔卡，自動收工）
+
+```bash
+cd /path/to/work/github/litellm-proxy
+./validate_engine.sh <新引擎>
+```
+Stage 0 靜態 → Stage 1 煙霧 job（載入＋暖機 → 測 models＋chat → 自動 scancel）。
+**VLM 模組**：煙霧通過後必補一筆帶圖請求（curl 模板見 SKILL.md Step 6）。
+
+### ④ 正式上線
+
+```bash
+./start_models.sh <新引擎>          # 派送 → 等 ready → Gateway 自動納入路由
+```
+
+### ⑤ 驗收
+
+```bash
+./healthcheck.sh                    # 全綠
+curl -s -H "Authorization: Bearer <虛擬金鑰>" http://localhost:54921/v1/models
+# 外部路徑（VM 隧道）抽測：http://VM_PUBLIC_IP:4000/v1/models
+```
+
+日常操作：`./stop_models.sh <新引擎>`（停）、`./start_models.sh <新引擎>`（重啟）。
+
 ## 已完成的評估記錄
 
 | 日期 | 模型 | 結論 | 模組 |

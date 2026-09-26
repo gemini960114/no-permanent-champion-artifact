@@ -3,7 +3,7 @@
 > ## ⚠️ 狀態：準備中（等待官方 FP8 權重釋出）
 > - **BF16 版不可行**：604B × 2B ≈ **1.21TB 權重**，超出單節點 8×H200（1,128GB）容量，
 >   `/work` 磁碟剩餘（1.1TB）也放不下——已評估排除（2026-09-26，評估流程見
->   [`skills/model-onboarding/README.md`](../../skills/model-onboarding/README.md)）。
+>   [`.claude/skills/model-onboarding/README.md`](../../.claude/skills/model-onboarding/README.md)）。
 > - **FP8 版（~604GB）→ 8×H200 可行**：權重後仍餘 ~520GB 供 KV cache。
 > - 官方釋出後流程：`cp config.env.example config.env`（已備妥）→ `./download_model.sh` →
 >   回專案根目錄 `./validate_engine.sh sglang-step5-fp8` → `./start_models.sh sglang-step5-fp8`。

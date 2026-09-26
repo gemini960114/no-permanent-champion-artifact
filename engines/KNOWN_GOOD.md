@@ -67,7 +67,7 @@
 | 關鍵參數 | `--context-length 262144`（官方 1M 為理想值）、`--reasoning-parser step3p5`（⚠️ model card 寫 `stepfun`，實測 0.5.20 DetectorMap 無此選項）、`--trust-remote-code`、`--mem-fraction-static 0.90`、`MAX_RUNNING_REQUESTS=64`（初始，上線後調優） |
 | 未實驗項 | MTP 投機解碼（image 已含 `step3p5_mtp.py`，俟官方參數確認） |
 | `HEALTH_TIMEOUT` | 2400 秒（604GB 載入＋暖機） |
-| 評估記錄 | 2026-09-26，流程見 [`skills/model-onboarding/README.md`](../skills/model-onboarding/README.md) |
+| 評估記錄 | 2026-09-26，流程見 [`.claude/skills/model-onboarding/README.md`](../.claude/skills/model-onboarding/README.md) |
 
 ---
 

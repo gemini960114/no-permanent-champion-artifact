@@ -23,7 +23,8 @@ description: >-
 | :--- | :--- | :--- | :--- |
 | **秒殺失敗**＋`Errno 24 Too many open files`＋成功數卡在 ~1020 | 客戶端 shell fd 上限 1024 | `ulimit -n 65535`（永久版寫 bashrc 頂端） | VM `~/.bashrc` 第 1 行 |
 | 秒殺失敗＋`ConnectError`＋外部連線 >1000 | **sshd** fd 上限 1024 | systemd override `LimitNOFILE=65535`＋彈隧道 | VM `/etc/systemd/system/ssh.service.d/override.conf` |
-| 連上後中斷＋`ReadError`＋高併發長串流 | SSH 隧道單流天花板（~1000 併發） | 短期無解（架構限制）；>1000 併發時上多隧道＋HAProxy | 見 `docs/EXTERNAL_VM_TUNNEL.md` 3.5 |
+| 連上後中斷＋`ReadError`＋高併發長串流 | **優先查隧道 sshd 的 fd**（`/proc/<pid>/limits`；2026-09-26 實錄：修 fd 後 1500 併發 100%） | 修 `/etc/security/limits.conf`（`* soft/hard nofile 65535`）＋彈隧道 | 見 `docs/EXTERNAL_VM_TUNNEL.md` 3.5 |
+| ReadError 且 sshd fd 已是 65535 | 隧道單流天花板（>1500 併發，尚未實測到） | 多隧道＋HAProxy（屆時才做） | 同上 |
 | **逾時失敗**（`ReadTimeout`）＋失敗集中在隊尾＋引擎 log 顯示大排隊 | 引擎併發 cap 太低 | `MAX_RUNNING_REQUESTS` 調高（48→100→128 實證 playbook）＋重啟引擎 | 各引擎 `config.env` |
 | 全面失敗（0%）＋耗時極短 | 服務沒起來／路由沒掛（例如 stop→start 競態跳過派送） | 查 `squeue`、endpoint 檔、Gateway 模型清單 | — |
 

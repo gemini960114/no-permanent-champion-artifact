@@ -25,13 +25,16 @@ Errno 24 Too many open files 是什麼？怎麼修？
   （⚠️ 坑：Ubuntu `.bashrc` 有非互動守衛，加底部則 `ssh vm '指令'` 讀不到——務必放最頂端）
 - **驗證**：`ssh litellm-vm 'ulimit -n'` → 65535
 
-### 案例 ②：91.8% → 100%（瓶頸是隧道，不是服務）
-- **症狀**：fd 修好後仍 8.2% 失敗，錯誤變 `ReadError`（連上後中斷）
-- **定罪方法（旁路測試）**：同樣 1500 人**繞過隧道直連 Gateway → 100%**
-  → Gateway 與三引擎無辜，兇手是 SSH 隧道單流串流天花板（~1000 併發）
-- **處置**：現階段記錄不修（真實用量遠低於 1000）；>1000 併發時上多隧道＋HAProxy
-- **補充發現**：隧道 sshd 的 fd soft limit 也是 1024（`/proc/<sshd>/limits`），
-  修法見 `docs/EXTERNAL_VM_TUNNEL.md` 3.5——修完**必須彈隧道**才吃到新值
+### 案例 ②：91.8% → 100%（真兇是 sshd fd，初判隧道是誤判）
+- **症狀**：客戶端 fd 修好後仍 8.2% 失敗，錯誤變 `ReadError`（連上後中斷）
+- **初判（後證實為誤）**：旁路直連 100% → 「隧道單流天花板 ~1000 併發」
+- **真相**：隧道 sshd 的 fd soft limit 也是 1024（`/proc/<sshd>/limits` 實查）。
+  修法＝`/etc/security/limits.conf` 加 `* soft/hard nofile 65535`（⚠️ 只改
+  systemd override 無效——per-connection sshd 不吃）＋**彈隧道**＋重測
+- **結局**：1500 人經隧道 **100%**（8,146 tok/s、P95 76.8s、零失敗）
+- **教訓**：旁路測試只能證明「問題在 VM↔Gateway 之間」，不能細分 sshd fd vs
+  隧道流控——**修一層、驗一層**；session fd 要量 sshd 本體（/proc），用 bash
+  測會被 .bashrc 的 ulimit 污染
 
 ### 案例 ③：95.7% → 100%（引擎併發 cap）
 - **症狀**：`ReadTimeout` 逾時、失敗集中在隊尾、引擎 log 顯示排隊 440

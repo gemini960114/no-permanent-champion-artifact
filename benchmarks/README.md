@@ -238,8 +238,9 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
 | GLM-5.3-Flash（cap 64） | 1000 人 × 800 tok | 95.7% | 2,324 | 6,077 | 286.6 秒 |
 | **GLM-5.3-Flash（cap 128，調優後）** | 1000 人 × 800 tok | **100%** | **3,057** | **6,980** | 236.8 秒 |
 | Qwen3.8-27B（單卡） | 500 人 × 500 tok | **100%** | 2,584 | 3,276 | 77.3 秒 |
-| 三模型混合（經隧道） | 1500 人 × 500 tok | 91.8% | **8,251** | — | 70.4 秒 |
-| **三模型混合（旁路直連）** | 1500 人 × 500 tok | **100%** | **8,156** | — | 77.6 秒 |
+| 三模型混合（經隧道，sshd fd 修復前） | 1500 人 × 500 tok | 91.8% | 8,251 | — | 70.4 秒 |
+| **三模型混合（旁路直連）** | 1500 人 × 500 tok | **100%** | 8,156 | — | 77.6 秒 |
+| **三模型混合（經隧道，sshd fd 修復後）** | 1500 人 × 500 tok | **100%** 🏆 | **8,146** | — | 76.8 秒 |
 
 > Qwen3.8-Flash 引擎沿用 2026-09-25 基線（1000×800：100%、峰值 6,221 tok/s），未重測。
 
@@ -252,16 +253,18 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
    單卡部署完全堪用。
 3. **混合負載的全景**：三引擎同時分流，Gateway 聚合 **~8,200 tok/s**、自身僅
    2.5% CPU／405MB——瓶頸完全不在 Gateway 與引擎。
-4. **⚠️ 真正的瓶頸鏈（兩個教訓）**：
+4. **⚠️ 真正的瓶頸鏈（三個 fd 相關教訓＋一次歸因修正）**：
    - **VM 客戶端 `ulimit -n` 1024**：1500 併發時 fd 耗盡（`Errno 24`），成功數卡
      ~1020——`ulimit -n 65535` 解決。壓測前必查客戶端 fd 上限。
-   - **單一 SSH 反向隧道的串流通道限制**：1500 併發長串流時 ~8% 連線 ReadError；
-     **旁路直連 Gateway 同規模 100%**。隧道實用上限 ~1000 併發（1000 人實測 100%）。
-     若未來需 >1000 外部併發：多隧道輪詢或改直連路徑。
-   - **隧道 sshd 的 fd soft limit 也是 1024**（`/proc/<sshd>/limits` 實查）——
-     外部連線 >1000 時的第一線瓶頸；修法（systemd override＋彈隧道）見
+   - **隧道 sshd 的 fd soft limit 也是 1024**（`/proc/<sshd>/limits` 實查）——外部
+     連線的第一線瓶頸。**修法正解是 `/etc/security/limits.conf`**（PAM 機制；
+     只改 systemd override 只影響主監聽器，per-connection sshd 不吃）——
+     修復後重測 1500 人經隧道 **100%**。詳見
      [`docs/EXTERNAL_VM_TUNNEL.md`](../docs/EXTERNAL_VM_TUNNEL.md) 3.5 節。
-     本輪完整診斷已技能化：[`.agents/skills/concurrency-troubleshooting/`](../.agents/skills/concurrency-troubleshooting/README.md)。
+   - **歸因修正實錄**：初判「8% ReadError 是隧道單流天花板」為**誤判**——真兇是
+     sshd fd。教訓：旁路測試只能證明「問題在 VM↔Gateway 之間」，不能細分 sshd fd
+     vs 隧道流控；**修一層驗一層**才是硬道理。單流天花板在 1500 內尚未摸到。
+   - 本輪完整診斷已技能化：[`.agents/skills/concurrency-troubleshooting/`](../.agents/skills/concurrency-troubleshooting/README.md)。
 5. **建議的生產容量**（經隧道對外）：~1000 併發、聚合 ~8,000 tok/s——現有使用者
    規模（數十至數百併發）有 10 倍以上餘裕。
 

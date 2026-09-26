@@ -17,7 +17,7 @@
 | `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 1000 人壓測通過 (2026-09-25) |
 | `vllm-deepseek-flash` | deepseek-ai/DeepSeek-V4.1-Flash | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 763 GB (**未下載**) | 2×H200 (TP2) | ⚪ 未驗證（權重未下載） |
 | `sglang-step5-fp8` | TypeSafeAI/Step-5-Preview-FP8 | SGLang **0.5.20**（原生 step3p5 支援） | `sglang_flash_latest.sif`（共用） | ~604 GB (**FP8 未釋出**) | 8×H200 (TP8+EP8) | 🟡 準備中（BF16 1.21TB 超出硬體已排除；FP8 釋出後即可上線） |
-| `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中 (2026-09-26，VLM 帶圖驗證通過) |
+| `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
 
 > `engines/sglang-qwen` → `sglang-qwen-27b` 的相容 symlink，非獨立引擎。
 

@@ -4,6 +4,8 @@
 > 新模型上線前先查此表找最接近的原型；image 版本更換後**必須重新驗證**並更新本表。
 > **識別規則**：image 以「框架 + 版本號」識別（例：SGLang 0.5.20），不以 SIF 檔名
 > （`*_latest.sif` 僅為檔名，實際版本以下表為準——檔名不改是為了避免中斷現行 config.env）。
+> 完整操作手冊（每日開退場、驗證、疑難排解）見
+> [docs/ENGINE_LIFECYCLE_GUIDE.md](../docs/ENGINE_LIFECYCLE_GUIDE.md)。
 
 ---
 

@@ -69,7 +69,7 @@ for conf in engines/*/config.env; do
 done
 
 # 3. 確保輔助腳本與模型啟動腳本具備執行權限
-chmod +x start.sh stop.sh test.sh key_tool.py install.sh lib/*.sh 2>/dev/null || true
+chmod +x start.sh stop.sh test.sh key_tool.py install.sh start_models.sh stop_models.sh new_engine.sh validate_engine.sh lib/*.sh 2>/dev/null || true
 chmod +x engines/*/*.sh 2>/dev/null || true
 
 # 4. 驗證 Gateway 安裝

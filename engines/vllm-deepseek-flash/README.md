@@ -37,3 +37,5 @@
 ./check_service.sh
 ```
 待端點自檢通過並標記 `STATE=ready` 後，回到專案根目錄執行 `./start.sh`，LiteLLM 即可自動將 `deepseek-ai/DeepSeek-V4.1-Flash` 與短別名 `deepseek-v4-flash` 納入負載平衡！
+
+> 💡 **一鍵替代方案**（專案根目錄）：`./start_models.sh vllm-deepseek-flash`（派送→等就緒→自動啟動 Gateway）、`./validate_engine.sh vllm-deepseek-flash`（上線前兩階段驗證，權重下載完成後建議先跑一次）、`./stop_models.sh vllm-deepseek-flash`（一鍵停止）。完整流程見 [docs/ENGINE_LIFECYCLE_GUIDE.md](../../docs/ENGINE_LIFECYCLE_GUIDE.md)。

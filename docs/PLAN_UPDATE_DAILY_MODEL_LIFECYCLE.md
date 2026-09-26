@@ -200,6 +200,12 @@ Slurm Job 本身仍應設定合理的 `--time`，作為即使停止腳本失敗�
 
 ### Phase 1B：Morning Controller 啟動排程與全自動生命週期 (規劃中)
 
+> 📌 **進度更新 (2026-09-26)**：手動一鍵版已實現——[`start_models.sh`](../start_models.sh)
+> （指定引擎派送→等就緒→自動重啟 Gateway，含防重複提交的冪等跳過）與
+> [`stop_models.sh`](../stop_models.sh)（一鍵停全部／特定引擎，job-name 精準匹配），
+> 操作手冊見 [ENGINE_LIFECYCLE_GUIDE.md](./ENGINE_LIFECYCLE_GUIDE.md)。
+> Phase 1B 剩餘工作＝在此基礎上加「排程（cron）＋開市前煙霧測試＋20:00 自動排空」。
+
 - 防止相同模型重複提交 Job 機制。
 - 定時提交當日各模型 Slurm Jobs。
 - 等候必要模型發布端點，並以 `flock` 保護單一 Controller 併發。

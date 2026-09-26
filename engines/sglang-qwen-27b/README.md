@@ -64,6 +64,8 @@ cd /path/to/work/github/litellm-proxy/engines/sglang-qwen-27b
 ./submit_slurm.sh
 ```
 
+> 💡 **一鍵替代方案**（專案根目錄）：`./start_models.sh sglang-qwen-27b`（派送→等就緒→自動啟動 Gateway）、`./validate_engine.sh sglang-qwen-27b`（上線前兩階段驗證）、`./stop_models.sh sglang-qwen-27b`（一鍵停止）。完整流程見 [docs/ENGINE_LIFECYCLE_GUIDE.md](../../docs/ENGINE_LIFECYCLE_GUIDE.md)，已驗證配方見 [engines/KNOWN_GOOD.md](../KNOWN_GOOD.md)。
+
 **進階調度與多實例啟動：**
 ```bash
 # 指定特定節點 (例如 node-L)

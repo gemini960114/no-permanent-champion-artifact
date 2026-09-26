@@ -95,6 +95,9 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 # ⑥ 更新 engines/KNOWN_GOOD.md（實測版本、參數、日期）——這步驟讓下一個人不用重新踩坑
 ```
 
+> 🛑 下線／重啟：`./stop_models.sh my-model` 一鍵停止；參數調整後以
+> `./validate_engine.sh my-model --fresh` 重新驗證再上線。
+
 ### validate_engine.sh 兩階段說明
 
 | Stage | 檢查項目 | 失敗時的提示 |

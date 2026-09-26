@@ -56,3 +56,5 @@ MAX_RUNNING_REQUESTS=100
 ./check_service.sh
 ```
 待端點自檢通過並標記 `STATE=ready` 後，回到專案根目錄執行 `./start.sh`，LiteLLM 即可自動將 `Qwen3.8-Flash-Next-FP8` 與短別名 `qwen3.8-flash` 納入負載平衡！
+
+> 💡 **一鍵替代方案**（專案根目錄）：`./start_models.sh sglang-qwen-flash`（派送→等就緒→自動啟動 Gateway）、`./validate_engine.sh sglang-qwen-flash`（上線前兩階段驗證）、`./stop_models.sh sglang-qwen-flash`（一鍵停止）。完整流程見 [docs/ENGINE_LIFECYCLE_GUIDE.md](../../docs/ENGINE_LIFECYCLE_GUIDE.md)。

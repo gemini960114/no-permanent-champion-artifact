@@ -48,7 +48,7 @@ description: >-
 - 記憶體計算表、image 版本
 - 啟動參數草案：TP/EP、context-length 現實值（官方值通常是理想值）、
   reasoning-parser（**實測合法值**）、MAX_RUNNING_REQUESTS 初始 64、HEALTH_TIMEOUT
-- 埠位分配（以各引擎 config.env 為準；現用：27b=30000、flash=32000、vllm=33000、step5=34000）
+- 埠位分配（以各引擎 config.env 為準；現用：27b=30000、flash=32000、vllm=33000、step5=34000、glm53=35000）
 - **不部署替代方案**（官方 API）與成本預估（下載時間／磁碟／GPU 時數）
 
 ### Step 5：等待明確同意 ⚠️（見鐵律 2）

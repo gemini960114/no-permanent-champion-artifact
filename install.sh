@@ -42,7 +42,6 @@ fi
 if [ ! -f ".env" ]; then
     echo "▶ 初始化 .env 環境變數檔..."
     NEW_MASTER_KEY=$(.venv/bin/python -c "import secrets; print('sk-litellm-'+secrets.token_urlsafe(32))")
-    NEW_SGLANG_KEY=$(.venv/bin/python -c "import secrets; print('sk-sglang-'+secrets.token_urlsafe(24))")
     cat > .env <<EOF
 # 監聽主機 (internal = 自動綁定本機叢集內網 IP，不綁公網 IP；跨登入節點 SSH 轉發與 OOD 代理皆可用)
 HOST=internal
@@ -54,9 +53,8 @@ LITELLM_MASTER_KEY=${NEW_MASTER_KEY}
 # 國網 GenAI Portal API Key (請填入您的國網 API Key)
 NCHC_GENAI_API_KEY=${NCHC_GENAI_API_KEY:-your_nchc_genai_api_key}
 
-# HPC 內部 SGLang Qwen 端點與鑑權金鑰 (由 start.sh 自動自 runtime/endpoints/ 合成動態配置)
-SGLANG_API_BASE=http://node-H:30000/v1
-SGLANG_API_KEY=${NEW_SGLANG_KEY}
+# 引擎內部金鑰請設於各 engines/*/config.env (由 config.env.example 複製)，
+# start.sh 會自動收集；本檔不需設定引擎金鑰或位址。完整說明見 .env.example。
 EOF
     chmod 600 .env
     echo "  .env 已建立，並設定權限為 600 (僅自己可讀寫)。"

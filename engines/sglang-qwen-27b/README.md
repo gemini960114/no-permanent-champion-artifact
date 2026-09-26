@@ -2,6 +2,8 @@
 
 本目錄整合了從 `/path/to/work/models/opentwbench` 提取並最佳化的高性能推論引擎架構，專門用於在 NCHC H200 超算叢集上，以 **單卡 GPU (1 Core H200)** 搭配 **純 Singularity 容器映像檔 (`sglang_latest.sif`)** 部署 `Qwen/Qwen3.8-27B` 深度思考推理大模型服務。
 
+> **🏆 實績（2026-09-27 SGLang vs vLLM 同模型 A/B 對決冠軍）**：官方基準配置（cap 128）500 人×500 tok 壓測 **100%／3,823 tok/s／P95 51.8s**，勝 vLLM 對照組（[`engines/vllm-qwen27b`](../vllm-qwen27b/)）6.3%；EAGLE 投機解碼實測 -40%（高併發不建議）。完整戰報見 [`benchmarks/README.md`](../../benchmarks/README.md)。
+
 ---
 
 ## 目錄檔案結構

@@ -33,6 +33,8 @@ vllm serve /path/to/work/models/Qwen3.8-27B \
 | KV | fp8_e4m3 | fp8 |
 | Gateway 模型名 | `Qwen/Qwen3.8-27B-FP8`＋別名 `qwen-27b` 等 | `Qwen/Qwen3.8-27B-vLLM`＋別名 `qwen-27b-vllm`（命名空間隔離） |
 
+> **實績（2026-09-27 A/B 對決）**：3,597 tok/s／P95 54.6s／100%——以 6.3% 之差負於 SGLang 對照組（3,823 tok/s）；MTP 投機解碼高併發實測 **-16%**（算力飽和下 draft+verify 為純開銷，生產不建議）。完整戰報見 [`benchmarks/README.md`](../../benchmarks/README.md)。
+
 ## 操作
 
 > 💡 **一鍵操作**（專案根目錄）：`./start_models.sh vllm-qwen27b`（派送→等就緒→自動重啟 Gateway）、

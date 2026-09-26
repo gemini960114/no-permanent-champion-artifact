@@ -31,7 +31,7 @@
 | `--mem-fraction-static` | 0.90 | 大權重情境提高靜態配置比例 |
 | `--max-running-requests` | 64（初始） | 上線後依記憶體餘量實測調優（比照 flash 48→100 經驗） |
 | `--trust-remote-code` | 必要 | step3p5 為新架構 |
-| `--reasoning-parser` | stepfun | 思維鏈內容解析 |
+| `--reasoning-parser` | **step3p5** | 思維鏈解析。⚠️ model card 寫 `stepfun`，但 2026-09-26 實測 SGLang 0.5.20 的 `ReasoningParser.DetectorMap` 無此選項（合法值為架構名 `step3p5`）——照抄官方指令會啟動失敗 |
 | MTP 投機解碼 | ❌ 暫不開 | image 內含 `step3p5_mtp.py`，俟官方參數確認後實驗（`config.env.example` 第 7 節） |
 | `HEALTH_TIMEOUT` | 2400 秒 | 604GB 權重載入＋CUDA Graph 暖機，較 flash 更保守 |
 

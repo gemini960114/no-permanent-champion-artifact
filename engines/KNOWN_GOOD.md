@@ -64,7 +64,7 @@
 | image | `sglang_flash_latest.sif`（與 flash **共用**，SGLang 0.5.20，2026-09-26 實測已內建 `step3p5.py`／`step3p5_mtp.py` 原生支援） |
 | 權重 | `Step-5-Preview-FP8`（~604 GB，**官方 FP8 尚未釋出**；BF16 版 1.21TB 超出 8×H200 與磁碟容量已排除） |
 | 平行 | TP=8 + EP=8（單節點 8×H200 = 1,128GB，KV 餘 ~520GB） |
-| 關鍵參數 | `--context-length 262144`（官方 1M 為理想值）、`--reasoning-parser stepfun`、`--trust-remote-code`、`--mem-fraction-static 0.90`、`MAX_RUNNING_REQUESTS=64`（初始，上線後調優） |
+| 關鍵參數 | `--context-length 262144`（官方 1M 為理想值）、`--reasoning-parser step3p5`（⚠️ model card 寫 `stepfun`，實測 0.5.20 DetectorMap 無此選項）、`--trust-remote-code`、`--mem-fraction-static 0.90`、`MAX_RUNNING_REQUESTS=64`（初始，上線後調優） |
 | 未實驗項 | MTP 投機解碼（image 已含 `step3p5_mtp.py`，俟官方參數確認） |
 | `HEALTH_TIMEOUT` | 2400 秒（604GB 載入＋暖機） |
 | 評估記錄 | 2026-09-26，流程見 [`skills/model-onboarding/README.md`](../skills/model-onboarding/README.md) |

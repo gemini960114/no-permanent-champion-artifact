@@ -13,6 +13,9 @@ fi
 
 CONTAINERS_DIR="/path/to/work/containers"
 TARGET_SIF="${SIF_PATH:-${CONTAINERS_DIR}/sglang_flash_latest.sif}"
+# ⚠️ 警告：本引擎與 sglang-qwen-flash「共用」同一 image 檔 (SGLang 0.5.20)。
+# 執行本腳本會重建/覆蓋該檔——重建後請以 validate_engine.sh 重新驗證「兩個」引擎
+# (sglang-qwen-flash 與 sglang-step5-fp8)，並更新 engines/KNOWN_GOOD.md 的版本登記。
 CACHE_DIR="${CONTAINERS_DIR}/apptainer_cache"
 TMP_DIR="${CONTAINERS_DIR}/apptainer_tmp"
 

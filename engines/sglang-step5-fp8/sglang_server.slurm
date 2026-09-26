@@ -161,7 +161,7 @@ CMD=(
     --mem-fraction-static "${MEM_FRACTION:-0.90}"
     --chunked-prefill-size "${CHUNKED_PREFILL_SIZE:-8192}"
     --context-length "${CONTEXT_LENGTH:-262144}"
-    --reasoning-parser "${REASONING_PARSER:-stepfun}"
+    --reasoning-parser "${REASONING_PARSER:-step3p5}"
     --host "${HOST:-0.0.0.0}"
     --port "$PORT"
 )

@@ -33,6 +33,8 @@ description: >-
 ```bash
 # ① 客戶端 fd（用 ssh 非互動路徑測才準）
 ssh litellm-vm 'ulimit -n'                      # <1000 → 病因①
+# ⚠️ 量「服務進程」的 fd 要看 /proc/<pid>/limits——shell 測值會被 .bashrc 的
+#    ulimit 行污染（外層 bash 先抬過，--norc 也躲不掉）
 
 # ② 隧道 sshd fd（外部連線第一線）
 ssh litellm-vm 'PID=$(sudo ss -ltnp | grep ":4000 " | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2); sudo cat /proc/$PID/limits | grep "open files"'

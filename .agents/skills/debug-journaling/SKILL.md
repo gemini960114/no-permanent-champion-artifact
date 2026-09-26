@@ -25,7 +25,7 @@ description: >-
 | 操作踩坑（腳本競態、路徑解析、節點陷阱） | `docs/ENGINE_LIFECYCLE_GUIDE.md` §5 疑難排解 | sbatch 沒 cd 引擎目錄→迷路 runtime |
 | 基礎設施（VM／隧道／網路／fd 上限） | `docs/EXTERNAL_VM_TUNNEL.md`（教訓小節） | §3.5 fd 上限、§4.1 多節點陷阱 |
 | 引擎配方／參數／版本陷阱 | `engines/KNOWN_GOOD.md` | `stepfun` parser 不存在→`step3p5` |
-| 壓測／容量／瓶頸定位 | `benchmarks/README.md` 工程解讀 | ulimit 1024、隧道 ~1000 併發 |
+| 壓測／容量／瓶頸定位 | `benchmarks/README.md` 工程解讀 | ulimit 1024、sshd fd 1024（含誤判修正實錄） |
 | AI 作業流程（評估、診斷方法論） | 對應 skill 的 README 記錄表／教訓區 | model-onboarding 評估記錄表 |
 | 所有變更的歷史軌跡 | `CHANGELOG.md`（修復條目寫「怎麼發現」） | 每次都有 |
 

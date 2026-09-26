@@ -265,8 +265,8 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
      sshd fd。教訓：旁路測試只能證明「問題在 VM↔Gateway 之間」，不能細分 sshd fd
      vs 隧道流控；**修一層驗一層**才是硬道理。單流天花板在 1500 內尚未摸到。
    - 本輪完整診斷已技能化：[`.agents/skills/concurrency-troubleshooting/`](../.agents/skills/concurrency-troubleshooting/README.md)。
-5. **建議的生產容量**（經隧道對外）：~1000 併發、聚合 ~8,000 tok/s——現有使用者
-   規模（數十至數百併發）有 10 倍以上餘裕。
+5. **建議的生產容量**（經隧道對外，sshd fd 修復後實證）：**~1500 併發、聚合 ~8,100 tok/s、100%**——
+   現有使用者規模（數十至數百併發）有 10 倍以上餘裕；>1500 尚未實測。
 
 ### 📁 本輪原始數據
 
@@ -275,3 +275,4 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
 | `bench_glm53_1000_users_cap64.json` / `_cap128.json` | GLM 調優前後對照 |
 | `bench_27b_500_users.json` | 27B 單卡基線 |
 | `bench_mixed_1500_users_via_tunnel.json` / `_bypass_tunnel.json` | 混合負載瓶頸定位對照 |
+| `bench_mixed_1500_users_sshd_fd_fixed.json` | sshd fd 修復後驗證輪（經隧道 100%，歸因修正的證據） |

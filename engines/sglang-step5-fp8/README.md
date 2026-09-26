@@ -19,7 +19,8 @@
 * **框架**：**SGLang 0.5.20**（與 `sglang-qwen-flash` 共用 `sglang_flash_latest.sif`——
   2026-09-26 實測該 image 已內建 `step3p5.py` 原生支援與 `step3p5_mtp.py`；
   我們的 vLLM 0.29.1rc1 image 無 step 系列支援，故不採 vLLM）。
-* **推論解析**：`--reasoning-parser stepfun`（官方指定）。
+* **推論解析**：`--reasoning-parser step3p5`（⚠️ model card 寫 `stepfun`，實測 SGLang 0.5.20
+  無此選項，正確值為架構名 `step3p5`）。
 * **全自動生命週期**：原生整合頂層 `lib/lifecycle.sh` 原子搶鎖、兩階段發布與退場安全清理。
 
 ## ⚙️ 關鍵啟動參數與理由

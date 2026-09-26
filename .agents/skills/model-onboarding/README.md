@@ -142,7 +142,7 @@ curl -s -H "Authorization: Bearer <虛擬金鑰>" http://localhost:54921/v1/mode
 | 日期 | 模型 | 結論 | 模組 |
 | :--- | :--- | :--- | :--- |
 | 2026-09-26 | [Step-5-Preview-BF16](https://huggingface.co/TypeSafeAI/Step-5-Preview-BF16) | 🟡 BF16（1.21TB）超出 8×H200 與磁碟；FP8＋8×H200 可行（SGLang **0.5.20** 原生支援 step3p5；⚠️ model card 的 `--reasoning-parser stepfun` 實測不存在，正確值 `step3p5`） | `engines/sglang-step5-fp8/`（等待 FP8 釋出） |
-| 2026-09-26 | [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) | ✅ 可行：328.3GB 原生 FP8＋8×H200 官方配方（SGLang **0.5.20** 原生 glm5_next；glm45/glm47 parser、tilelang、deep_gemm、EAGLE 全數實測在 image 內；H200 無 4-GPU 配方） | `engines/sglang-glm53-flash/`（已建模，等待下載確認） |
+| 2026-09-26 | [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash) | ✅ 可行：328.3GB 原生 FP8＋8×H200 官方配方（SGLang **0.5.20** 原生 glm5_next；glm45/glm47 parser、tilelang、deep_gemm、EAGLE 全數實測在 image 內；H200 無 4-GPU 配方） | `engines/sglang-glm53-flash/`（✅ 已上線，VLM 帶圖驗證通過） |
 
 ## 相關文件
 

@@ -258,6 +258,10 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
    - **單一 SSH 反向隧道的串流通道限制**：1500 併發長串流時 ~8% 連線 ReadError；
      **旁路直連 Gateway 同規模 100%**。隧道實用上限 ~1000 併發（1000 人實測 100%）。
      若未來需 >1000 外部併發：多隧道輪詢或改直連路徑。
+   - **隧道 sshd 的 fd soft limit 也是 1024**（`/proc/<sshd>/limits` 實查）——
+     外部連線 >1000 時的第一線瓶頸；修法（systemd override＋彈隧道）見
+     [`docs/EXTERNAL_VM_TUNNEL.md`](../docs/EXTERNAL_VM_TUNNEL.md) 3.5 節。
+     本輪完整診斷已技能化：[`.agents/skills/concurrency-troubleshooting/`](../.agents/skills/concurrency-troubleshooting/README.md)。
 5. **建議的生產容量**（經隧道對外）：~1000 併發、聚合 ~8,000 tok/s——現有使用者
    規模（數十至數百併發）有 10 倍以上餘裕。
 

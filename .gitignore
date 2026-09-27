@@ -163,3 +163,10 @@ Thumbs.db
 # agent 環境專屬設定（本機）
 .claude/
 .roo/
+
+# LaTeX 產物（保留 PDF，其餘 build 產物忽略）
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out

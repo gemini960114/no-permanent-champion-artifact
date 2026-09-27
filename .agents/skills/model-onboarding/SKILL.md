@@ -123,6 +123,6 @@ docker build（實錄：GLM-5.3-Flash 的 vLLM Recipe 存在，但要求 vLLM 0.
 非 gated 建議帶**——避免匿名限流，下載更穩）
 ② 下載權重（`nohup` 背景執行；告知磁碟需求、預估時間與完成判斷）
 ③ `./validate_engine.sh <引擎>`（VLM 模組含帶圖測試）
-④ `./start_models.sh <引擎>` 上線
+④ `./start_models.sh <引擎>` 上線（可加 `--account <計畫代號>` 指定 wallet 計費，未指定沿用 config.env 的 `SLURM_ACCOUNT`）
 ⑤ `./healthcheck.sh`＋外部路徑抽測驗收
 最後更新 KNOWN_GOOD 與本 skill 的評估記錄表。

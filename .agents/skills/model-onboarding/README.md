@@ -125,6 +125,7 @@ Stage 0 靜態 → Stage 1 煙霧 job（載入＋暖機 → 測 models＋chat �
 
 ```bash
 ./start_models.sh <新引擎>          # 派送 → 等 ready → Gateway 自動納入路由
+./start_models.sh --account <計畫> <新引擎>   # 指定 wallet 計畫代號計費（未指定沿用 config.env 預設）
 ```
 
 ### ⑤ 驗收

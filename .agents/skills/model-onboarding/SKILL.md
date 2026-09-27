@@ -25,10 +25,23 @@ description: >-
 **VLM**）、context length、**是否 gated（HF 條款）**、License 限制。
 
 **官方部署文件是第一優先參數來源**（實錄兩戰 A/B 全靠它）：model card 的
-「Serving / Deploy」章節會給 **SGLang Cookbook**（docs.sglang.io/cookbook/...）與
-**vLLM Recipe**（recipes.vllm.ai/...）連結——**先抓這兩份官方文件抄參數，不要自己猜**
-（實錄：vLLM Recipe 明載 Flash-Next「純 TP 與 FP8 128-寬量化塊不相容，必須 TEP」、
-「max-num-seqs 低於 256 會啟動錯誤」、「MTP 於 H100 實測變慢勿開」——三個地雷全靠文件避開）。
+「Serving / Deploy」章節會給 **SGLang Cookbook** 與 **vLLM Recipe** 連結——**先抓這兩份
+官方文件抄參數，不要自己猜**（實錄：vLLM Recipe 明載 Flash-Next「純 TP 與 FP8 128-寬
+量化塊不相容，必須 TEP」、「max-num-seqs 低於 256 會啟動錯誤」、「MTP 於 H100 實測
+變慢勿開」——三個地雷全靠文件避開）。
+
+**model card 沒給連結時，依 URL 模式主動推導並嘗試**（兩者皆已實證存在於主流模型，
+GLM/Qwen 全系列都有；404 才視為無官方文件）：
+
+| 來源 | URL 模式（HF repo = `<org>/<model>`） | 實證 |
+| :--- | :--- | :--- |
+| vLLM Recipe | `https://recipes.vllm.ai/<org>/<model>` | Qwen3.8-27B／Flash-Next／GLM-5.3-Flash ✓ |
+| SGLang Cookbook | `https://docs.sglang.io/cookbook/autoregressive/<org>/<model>` | Qwen3.8-27B／GLM-5.3-Flash ✓ |
+
+⚠️ **Recipe/Cookbook 存在 ≠ 我們的 image 支援**：官方文件可能要求更新版框架或專用
+docker build（實錄：GLM-5.3-Flash 的 vLLM Recipe 存在，但要求 vLLM 0.29.0+ docker 版
+＋FlashInfer ≥0.6.17——`check_engine_support.sh` 查的是**我們的 image**，兩者都要查，
+以 Step 6 煙霧測試為最終裁決）。
 
 ### Step 2：實測引擎支援（跑腳本，別徒手）
 ```bash

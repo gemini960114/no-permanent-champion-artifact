@@ -229,7 +229,7 @@ P95 latency & 87.2 s & 64.4 s \\
 \label{tab:dense-r2}
 \end{table}
 
-\subsection{Ultra-sparse MoE: vLLM 2.33$\times$}
+\subsection{\texorpdfstring{Ultra-sparse MoE: vLLM 2.33$\times$}{Ultra-sparse MoE: vLLM 2.33x}}
 \label{sec:moe}
 
 On the ultra-sparse MoE, the ranking reversed (Table~\ref{tab:moe}).
@@ -441,7 +441,7 @@ The authors gratefully acknowledge the National Center for High-performance Comp
 
 The artifact repository is available at
 \begin{center}\url{https://github.com/gemini960114/no-permanent-champion-artifact}\end{center}
-\noindent It is a redacted copy of the platform repository and its commit history: deployment-specific network addresses, host names, account identifiers, and file-system paths are replaced with placeholders (compute-node names consistently, so that same-node and different-node placements remain distinguishable), original commit timestamps are preserved, and the operational documentation of the private deployment is not included. Raw per-run statistics (JSON) for all configurations in Tables~\ref{tab:dense-r1}--\ref{tab:reliability}---except the initial 67.9\% mixed run, which is recorded in the case records of the concurrency-troubleshooting skill---are available in its \texttt{benchmarks/\allowbreak results/} directory. Engine configurations are recorded in \texttt{engines/KNOWN\_GOOD.md}. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released in the artifact repository (\texttt{.agents/skills/}). The manuscript-writing skills are third-party skills that the repository pins by content hash in \texttt{skills-lock.json} but does not redistribute. The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by version names, not content digests), and it does not preserve the agent sessions' verbatim prompts.
+\noindent It is a redacted copy of the platform repository and its commit history: deployment-specific network addresses, host names, account identifiers, and file-system paths are replaced with placeholders (compute-node names consistently, so that same-node and different-node placements remain distinguishable), original commit timestamps are preserved, and the private deployment's network-access, tunnel, TLS, and client-connection guides are not included; the remaining documents (for example, the benchmark and engine-lifecycle guides) retain redacted descriptions of the deployment. Raw per-run statistics (JSON) for all configurations in Tables~\ref{tab:dense-r1}--\ref{tab:reliability}---except the initial 67.9\% mixed run, which is recorded in the case records of the concurrency-troubleshooting skill---are available in its \texttt{benchmarks/\allowbreak results/} directory. Engine configurations are recorded in \texttt{engines/KNOWN\_GOOD.md}. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released in the artifact repository (\texttt{.agents/skills/}). The manuscript-writing skills are third-party skills that the repository pins by content hash in \texttt{skills-lock.json} but does not redistribute. The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by version names, not content digests), and it does not preserve the agent sessions' verbatim prompts.
 
 \bibliographystyle{unsrtnat}
 \bibliography{refs}

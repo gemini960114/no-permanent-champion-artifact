@@ -173,3 +173,9 @@ paper/*.out
 *.synctex.gz
 *.fls
 *.fdb_latexmk
+
+# 寫論文用 skills（不屬於本 repo——公開位址為 skills-hub）
+.agents/skills/academic-writing-skills/
+.agents/skills/arxiv/
+.agents/skills/science-research-writing/
+.agents/skills/scientific-writing/

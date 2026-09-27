@@ -20,6 +20,24 @@ model_list:
       api_base: https://portal.genai.nchc.org.tw/api/v1
       api_key: os.environ/NCHC_GENAI_API_KEY
 
+  - model_name: Inkling-Small
+    litellm_params:
+      model: openai/Inkling-Small
+      api_base: https://portal.genai.nchc.org.tw/api/v1
+      api_key: os.environ/NCHC_GENAI_API_KEY
+
+  - model_name: MiniMax-M3
+    litellm_params:
+      model: openai/MiniMax-M3
+      api_base: https://portal.genai.nchc.org.tw/api/v1
+      api_key: os.environ/NCHC_GENAI_API_KEY
+
+  - model_name: Muse-Glimmer-30B
+    litellm_params:
+      model: openai/Muse-Glimmer-30B
+      api_base: https://portal.genai.nchc.org.tw/api/v1
+      api_key: os.environ/NCHC_GENAI_API_KEY
+
   # ==========================================
   # HPC 內部模型服務 (由各模型目錄 Slurm Job 啟動)
   # 注意：以下條目僅為 scripts/generate_runtime_config.py 不存在時的靜態 fallback，

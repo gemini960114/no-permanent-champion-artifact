@@ -1,4 +1,4 @@
-# No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA Architectures on H200 GPUs
+# No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA-Hybrid Architectures on H200 GPUs
 
 **Chao-Chun Chuang**¹\* and **Po-Hsiang Lin**²
 
@@ -6,6 +6,7 @@
 ²Kaohsiung Veterans General Hospital, Kaohsiung, Taiwan
 
 \* Corresponding author: c00cjz00@nchc.org.tw
+
 September 2026
 
 ---
@@ -108,7 +109,7 @@ The evaluation asked two questions per model: (i) which framework serves it fast
 
 **Metrics.** We report *aggregate* throughput (total output tokens divided by wall time), *success rate* (completed requests ÷ total), and *tail latency* (P95). We treat a configuration as production-eligible only at 100% success; one R2 configuration failed this bar (Section 5.3).
 
-**Limitations of protocol.** Each configuration was measured once at saturation; we adopt ~5% as a working threshold (a convention, not a measurement) and do not interpret smaller differences. All measurements are single-instance (one engine deployment per framework per model), with no other jobs scheduled on the engines' GPUs during the battle windows (verifiable from the job-to-node table).
+**Limitations of protocol.** Each configuration was measured once at saturation; we adopt ~5% as a working threshold (a convention, not a measurement) and do not interpret smaller differences. All measurements are single-instance (one engine deployment per framework per model), the engines' Slurm allocations per battle window are recorded in the job table.
 
 ## 5 Results
 
@@ -287,8 +288,12 @@ We built a multi-model API service on an HPC cluster—a LiteLLM gateway over Sl
 
 ---
 
-*Raw per-run statistics (JSON) for all configurations in Tables 4–9—except the initial 67.9% mixed run, which is recorded in the platform's operations documentation—are available in `benchmarks/results/` of the platform repository. Engine configurations are recorded in `engines/KNOWN_GOOD.md`. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (`.agents/skills/`); the manuscript-writing skills are released at https://github.com/gemini960114/skills-hub (provenance locked in `skills-lock.json`).*
+*Raw per-run statistics (JSON) for all configurations in Tables 4–9—except the initial 67.9% mixed run, which is recorded in the platform's operations documentation—are available in `benchmarks/results/` of the platform repository (https://github.com/gemini960114/litellm-proxy). Engine configurations are recorded in `engines/KNOWN_GOOD.md`. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (`.agents/skills/`); the manuscript-writing skills are released at https://github.com/gemini960114/skills-hub (provenance locked in `skills-lock.json`).*
+
+## Acknowledgments
+
+The authors thank the National Center for High-performance Computing for the computing resources and operational support used in this work.
 
 ## AI-Use Disclosure
 
-The experiments reported in this paper were executed by LLM-based coding agents following the versioned procedures ("skills") described in Section 3, under the direction and release decisions of the human authors. The manuscript itself—including literature retrieval and verification against the arXiv API, structural drafting from writing-methodology skills, and evidence-alignment auditing—was drafted with the assistance of such agents (the agent used for the final revision was opencode, powered by GLM-5.3), and an independent LLM agent performed three rounds of adversarial review whose findings are incorporated above. All quantitative results originate from the measurements of Sections 4–5; every claim was checked against the raw result files; and the human authors reviewed and approved the final manuscript and take full responsibility for its content. Consistent with arXiv and conference policy, no AI system is listed as an author.
+The experiments reported in this paper were executed by LLM-based coding agents following the versioned procedures ("skills") described in Section 3, under the direction and release decisions of the human authors. The manuscript itself—including literature retrieval and verification against the arXiv API, structural drafting from writing-methodology skills, and evidence-alignment auditing—was drafted with the assistance of such agents (the agent used for the final revision was opencode, powered by GLM-5.3), and an independent LLM agent performed three rounds of adversarial review whose findings are incorporated above. All quantitative results originate from the measurements of Sections 4–5; every claim was checked against the raw result files or, for the initial mixed-run figure, the operations documentation; and the human authors reviewed and approved the final manuscript and take full responsibility for its content. Consistent with arXiv and conference policy, no AI system is listed as an author.

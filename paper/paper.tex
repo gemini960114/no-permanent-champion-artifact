@@ -4,21 +4,25 @@
 \usepackage{amsmath,amssymb}
 \usepackage{tabularx}
 \usepackage{microtype}
+\usepackage{xspace}
 \usepackage{tikz}
 \usetikzlibrary{positioning,arrows.meta}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
+\usetikzlibrary{patterns}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA-Hybrid Architectures on H200 GPUs}, pdfauthor={Chao-Chun Chuang, Po-Hsiang Lin}}
 \usepackage{url}
 
-\newcommand{\tps}{tok/s}
+\newcommand{\tps}{tok/s\xspace}
 
-\title{\textbf{No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA Architectures on H200 GPUs}}
+\title{\textbf{No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA-Hybrid Architectures on H200 GPUs}}
 
 \author{
-Chao-Chun Chuang$^{1,\ast}$ \and Po-Hsiang Lin$^{2}$\\[4pt]
-\small $^{1}$National Center for High-performance Computing (NCHC), National Institutes of Applied Research (NIAR), Taiwan\\
+Chao-Chun Chuang$^{1,\ast}$ and Po-Hsiang Lin$^{2}$\\[4pt]
+\small $^{1}$National Center for High-performance Computing (NCHC),\\
+\small National Institutes of Applied Research (NIAR), Taiwan\\
 \small $^{2}$Kaohsiung Veterans General Hospital, Kaohsiung, Taiwan\\[2pt]
 \small $\ast$ Corresponding author: \texttt{c00cjz00@nchc.org.tw}
 }
@@ -139,7 +143,7 @@ The evaluation asked two questions per model: (i) which framework serves it fast
 \textbf{Condition} & \textbf{Dense battle} & \textbf{Ultra-sparse MoE battle} & \textbf{KDA battle} \\
 \midrule
 Model (same checkpoint both frameworks) & Qwen3.8-27B (BF16, 52 GB) & Qwen3.8-Flash-Next (FP8, 173 GB; 180B/6B active) & GLM-5.3-Flash (FP8, 306 GB) \\
-Architecture & Dense hybrid: GDN + full attention (\texttt{Qwen3\_5ForConditionalGeneration}) & Ultra-sparse MoE: 512 experts + 51B N-gram embedding (\texttt{Qwen4ExpForConditionalGeneration}) & KDA linear attention + DSA, 288-expert MoE (8 active), 1M context (\texttt{Glm5NextForConditionalGeneration}) \\
+Architecture & Dense hybrid: GDN + full attention & Ultra-sparse MoE: 512 experts + 51B N-gram embedding & KDA linear attention + DSA, 288-expert MoE (8 active), 1M context \\
 GPUs per engine & 1$\times$ H200 & 4$\times$ H200 (TP4+EP4) & 8$\times$ H200 (TP8+EP8 / TEP8) \\
 Frameworks & SGLang 0.5.20 vs vLLM 0.29.1rc1 & SGLang 0.5.20 vs vLLM 0.29.1rc1 & SGLang 0.5.20 vs vLLM 0.28.1rc1 (dedicated GLM build) \\
 Engine parameters & Official docs: SGLang Cookbook vs vLLM Recipe (per-architecture pages) & idem; \texttt{-{}-max-num-seqs 256} per Recipe; SGLang cap aligned to 256 & idem; BF16 KV cache (FP8 KV unsupported on Hopper for this model, per Recipe) \\
@@ -148,7 +152,7 @@ Workload & 500 concurrent users $\times$ max\_tokens 500 & 1,000 users $\times$ 
 Verified work (output tokens) & 207,832 vs 207,638 ($\pm$0.1\%) & 516k--525k (R1 pair $\pm$0.8\%; R2 pair 1.46\%, disclosed) & 732k--734k (R1); R2 vLLM censored at 623k by timeouts \\
 \bottomrule
 \end{tabularx}
-\caption{A/B conditions. ``R1'' denotes the plain configuration (no speculative decoding, the production recommendation); ``R2'' denotes speculative decoding enabled (the checkpoint's integrated MTP/NEXTN head, with each framework's recommended step/top-k settings).}
+\caption{A/B conditions. ``R1'' denotes the plain configuration (no speculative decoding, the production recommendation); ``R2'' denotes speculative decoding enabled (the checkpoint's integrated MTP/NEXTN head, with each framework's recommended step/top-k settings). Architecture classes: \texttt{Qwen3\_5ForConditionalGeneration} (dense), \texttt{Qwen4ExpForConditionalGeneration} (ultra-sparse MoE), \texttt{Glm5NextForConditionalGeneration} (KDA hybrid).}
 \label{tab:conditions}
 \end{table}
 
@@ -156,7 +160,7 @@ Verified work (output tokens) & 207,832 vs 207,638 ($\pm$0.1\%) & 516k--525k (R1
 
 \textbf{Metrics.} We report \emph{aggregate} throughput (total output tokens divided by wall time), \emph{success rate} (completed requests $\div$ total), and \emph{tail latency} (P95). We treat a configuration as production-eligible only at 100\% success; one R2 configuration failed this bar (Section~\ref{sec:kda}).
 
-\textbf{Limitations of protocol.} Each configuration was measured once at saturation; we adopt $\sim$5\% as a working threshold (a convention, not a measurement) and do not interpret smaller differences. All measurements are single-instance (one engine deployment per framework per model), with no other jobs scheduled on the engines' GPUs during the battle windows (verifiable from the job-to-node table).
+\textbf{Limitations of protocol.} Each configuration was measured once at saturation; we adopt $\sim$5\% as a working threshold (a convention, not a measurement) and do not interpret smaller differences. All measurements are single-instance (one engine deployment per framework per model), the engines' Slurm allocations per battle window are recorded in the job table.
 
 \section{Results}
 
@@ -228,6 +232,7 @@ On the KDA model, SGLang again led (Table~\ref{tab:kda}). The vLLM side required
 
 \begin{table}[t]
 \centering
+\small
 \begin{tabular}{lcc}
 \toprule
 \textbf{Configuration} & \textbf{SGLang 0.5.20} & \textbf{vLLM 0.28.1rc1 (dedicated)} \\
@@ -268,10 +273,10 @@ Table~\ref{tab:synthesis} and Figure~\ref{fig:throughput} collect the headline r
 \addplot coordinates {(Dense 27B,3597) (Ultra-sparse MoE,7886) (KDA MoE,2857)};
 \addplot coordinates {(Dense 27B,3034) (Ultra-sparse MoE,4282) (KDA MoE,2066)};
 \legend{SGLang R1, SGLang R2 (spec.), vLLM R1, vLLM R2 (spec.)}
-\node[pin=120:{\scriptsize censored (85.6\% success)}] at (axis cs:KDA MoE,2066) {};
+\addplot[forget plot, draw=black!60, pattern=north east lines, pattern color=black!60, bar shift=13.5pt] coordinates {(KDA MoE,2066)};
 \end{axis}
 \end{tikzpicture}
-\caption{Aggregate throughput of the three battles (values from Tables~\ref{tab:dense-r1}--\ref{tab:kda}). R2 denotes speculative decoding enabled. The vLLM R2 bar on the KDA model is a censored measurement (85.6\% success; work truncated at 623k tokens, Section~\ref{sec:method}).}
+\caption{Aggregate throughput of the three battles (values from Tables~\ref{tab:dense-r1}--\ref{tab:kda}). R2 denotes speculative decoding enabled. The \emph{hatched} bar (vLLM R2 on the KDA model) is a censored measurement: 85.6\% success, work truncated at 623k tokens (Section~\ref{sec:method}).}
 \label{fig:throughput}
 \end{figure}
 
@@ -345,11 +350,15 @@ We built a multi-model API service on an HPC cluster---a LiteLLM gateway over Sl
 
 \section*{AI-Use Disclosure}
 
-The experiments reported in this paper were executed by LLM-based coding agents following the versioned procedures (``skills'') described in Section~\ref{sec:platform}, under the direction and release decisions of the human authors. The manuscript itself---including literature retrieval and verification against the arXiv API, structural drafting from writing-methodology skills, and evidence-alignment auditing---was drafted with the assistance of such agents (the agent used for the final revision was opencode, powered by GLM-5.3), and an independent LLM agent performed three rounds of adversarial review whose findings are incorporated above. All quantitative results originate from the measurements of Sections~4--5; every claim was checked against the raw result files; and the human authors reviewed and approved the final manuscript and take full responsibility for its content. Consistent with arXiv and conference policy, no AI system is listed as an author.
+The experiments reported in this paper were executed by LLM-based coding agents following the versioned procedures (``skills'') described in Section~\ref{sec:platform}, under the direction and release decisions of the human authors. The manuscript itself---including literature retrieval and verification against the arXiv API, structural drafting from writing-methodology skills, and evidence-alignment auditing---was drafted with the assistance of such agents (the agent used for the final revision was opencode, powered by GLM-5.3), and an independent LLM agent performed three rounds of adversarial review whose findings are incorporated above. All quantitative results originate from the measurements of Sections~4--5; every claim was checked against the raw result files or, for the initial mixed-run figure, the operations documentation; and the human authors reviewed and approved the final manuscript and take full responsibility for its content. Consistent with arXiv and conference policy, no AI system is listed as an author.
+
+\section*{Acknowledgments}
+
+The authors thank the National Center for High-performance Computing for the computing resources and operational support used in this work.
 
 \section*{Data and Artifact Availability}
 
-Raw per-run statistics (JSON) for all configurations in Tables~\ref{tab:dense-r1}--\ref{tab:reliability}---except the initial 67.9\% mixed run, which is recorded in the platform's operations documentation---are available in \texttt{benchmarks/results/} of the platform repository. Engine configurations are recorded in \texttt{engines/KNOWN\_GOOD.md}. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (\texttt{.agents/skills/}); the manuscript-writing skills are released at \url{https://github.com/gemini960114/skills-hub} (provenance locked in \texttt{skills-lock.json}).
+The platform repository is available at \url{https://github.com/gemini960114/litellm-proxy}. Raw per-run statistics (JSON) for all configurations in Tables~\ref{tab:dense-r1}--\ref{tab:reliability}---except the initial 67.9\% mixed run, which is recorded in the platform's operations documentation---are available in its \texttt{benchmarks/results/} directory. Engine configurations are recorded in \texttt{engines/KNOWN\_GOOD.md}. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (\texttt{.agents/skills/}); the manuscript-writing skills are released at \url{https://github.com/gemini960114/skills-hub} (provenance locked in \texttt{skills-lock.json}).
 
 \bibliographystyle{unsrtnat}
 \bibliography{refs}

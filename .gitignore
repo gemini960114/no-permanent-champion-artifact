@@ -170,3 +170,6 @@ paper/*.bbl
 paper/*.blg
 paper/*.log
 paper/*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk

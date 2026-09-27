@@ -116,7 +116,31 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 
 ---
 
-## 5. 疑難排解（實際踩過的坑）
+## 5. 生產流量切換（ALIAS_CLAIM 設定檔開關）
+
+同模型雙框架（如 `sglang-qwen-flash` vs `vllm-flash-next`）的生產流量歸屬，由各引擎
+`config.env` 的 `ALIAS_CLAIM` 聲明控制——**引擎不用重啟，改 config 後重啟 Gateway 即生效**
+（generator 以引擎 config.env 為即時真相，端點檔僅為啟動時快照）：
+
+| ALIAS_CLAIM | 意義 | 註冊的模型名 |
+| :--- | :--- | :--- |
+| `production` | 生產正名持有者 | MODEL_NAME＋MODEL_ALIAS＋該系列完整生產別名組（如 `qwen3.8-flash`） |
+| `isolated` | 熱備援／對照組 | **只有** MODEL_ALIAS（後綴名，如 `qwen3.8-flash-sglang`），不搶生產正名 |
+| 未設定 | 自動（預設） | 依名稱智慧別名（A0/A/B 規則，向後相容） |
+
+```bash
+# 切換範例：SGLang flash → vLLM flash（2026-09-27 已執行）
+#   engines/vllm-flash-next/config.env:  ALIAS_CLAIM=production（MODEL_ALIAS=qwen-flash-vllm 保留）
+#   engines/sglang-qwen-flash/config.env: ALIAS_CLAIM=isolated＋MODEL_ALIAS=qwen3.8-flash-sglang
+./stop.sh && nohup ./start.sh > /dev/null 2>&1 &    # 只重啟 Gateway（~10 秒）
+# 驗證：qwen3.8-flash → 新 primary；qwen3.8-flash-sglang → 舊引擎（備援可達）
+# 切回：兩引擎的 ALIAS_CLAIM 與 MODEL_ALIAS 對調，重啟 Gateway
+```
+
+注意：`isolated` 引擎的 MODEL_ALIAS 必須是後綴名（不可與生產別名組撞名，否則 litellm
+會將同名 deployment 負載平衡混流）。
+
+## 6. 疑難排解（實際踩過的坑）
 
 | 症狀 | 原因 | 解法 |
 | :--- | :--- | :--- |
@@ -130,7 +154,7 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 
 ---
 
-## 6. 與其他文件的關係
+## 7. 與其他文件的關係
 
 | 文件 | 內容 |
 | :--- | :--- |

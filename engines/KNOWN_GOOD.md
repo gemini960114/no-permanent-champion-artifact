@@ -14,9 +14,9 @@
 | 引擎目錄 | 模型 | 框架 / 實測版本 | image (SIF) | 權重大小 | 硬體 | 驗證狀態 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
 | `sglang-qwen-27b` | Qwen/Qwen3.8-27B-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif`（共用） | 52 GB | 1×H200 (TP1) | ✅ 運行中；A/B R1 冠軍 3,823 tok/s（2026-09-27） |
-| `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中；A/B 第二戰 3,925 tok/s（各自最佳，敗 vLLM 2.01×，2026-09-27） |
+| `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中（**熱備援** `qwen3.8-flash-sglang`）；A/B 第二戰 3,925 tok/s（敗 vLLM 2.01×，2026-09-27） |
 | `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
-| `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議，2026-09-27） |
+| `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中（**生產正名 `qwen3.8-flash`**，2026-09-27 切換）；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議） |
 | `sglang-step5-fp8` | TypeSafeAI/Step-5-Preview-FP8 | SGLang **0.5.20**（原生 step3p5 支援） | `sglang_flash_latest.sif`（共用） | ~604 GB (**FP8 未釋出**) | 8×H200 (TP8+EP8) | 🟡 準備中（BF16 1.21TB 超出硬體已排除；FP8 釋出後即可上線） |
 | `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
 

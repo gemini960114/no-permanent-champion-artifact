@@ -342,6 +342,19 @@ def main():
         model_path = info.get("RESOLVED_MODEL_PATH", "")
         api_key_env = info.get("API_KEY_ENV", "SGLANG_API_KEY")
         engine_dir = info.get("ENGINE_DIR", "")
+        # 別名所有權聲明（生產切換開關）：
+        #   production = 取得生產別名組（智慧別名庫完整補齊）
+        #   isolated   = 只註冊 MODEL_ALIAS（後綴名），不搶生產正名（MODEL_NAME 讇給 primary）
+        #   未設定     = 依名稱自動判斷（A0/A/B 規則，向後相容）
+        # MODEL_ALIAS 與 ALIAS_CLAIM 皆以引擎 config.env 為即時真相（端點檔為啟動時快照），
+        # 引擎運行中變更這兩項不必重啟引擎——重啟 Gateway 即生效（生產切換＝改兩行 config）
+        if engine_dir:
+            live_alias = read_config_env_var(os.path.join(engine_dir, "config.env"), "MODEL_ALIAS")
+            if live_alias:
+                model_alias = live_alias
+            alias_claim = read_config_env_var(os.path.join(engine_dir, "config.env"), "ALIAS_CLAIM")
+        else:
+            alias_claim = info.get("ALIAS_CLAIM", "")
         node = info.get("NODE_HOSTNAME", "unknown")
         port = info.get("PORT", "unknown")
 
@@ -376,6 +389,7 @@ def main():
         discovered_endpoints.append({
             "model_name": model_name,
             "model_alias": model_alias,
+            "alias_claim": alias_claim,
             "api_base": api_base,
             "model_path": model_path,
             "api_key_env": api_key_env,
@@ -391,37 +405,55 @@ def main():
     alias_deployments = []
     for ep in discovered_endpoints:
         names_to_register = []
-        if ep.get("model_name"):
-            names_to_register.append(ep["model_name"])
-        if ep.get("model_alias") and ep["model_alias"] not in names_to_register:
-            names_to_register.append(ep["model_alias"])
+        claim = ep.get("alias_claim", "")
+        if claim == "isolated":
+            # 備援/對照組：只註冊後綴別名，不搶生產正名與生產別名組
+            if ep.get("model_alias"):
+                names_to_register.append(ep["model_alias"])
+        else:
+            if ep.get("model_name"):
+                names_to_register.append(ep["model_name"])
+            if ep.get("model_alias") and ep["model_alias"] not in names_to_register:
+                names_to_register.append(ep["model_alias"])
 
-        # 智慧別名映射庫 (自動補齊常用代號與簡稱)
-        # A0. vLLM 對照組（A/B 測試命名空間隔離；必須優先於一般 Qwen 規則，
-        #     否則 -vLLM 後綴名會落入 A/B 規則、與 SGLang 引擎共用別名導致負載混合）
-        if any("vllm" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
-            if any("flash" in n.lower() for n in names_to_register):
-                vllm_std_names = ("Qwen3.8-Flash-Next-vLLM", "qwen-flash-vllm", "vllm-flash-next", "Qwen/Qwen3.8-Flash-Next-vLLM")
-            else:
-                vllm_std_names = ("Qwen3.8-27B-vLLM", "vllm-qwen-27b", "Qwen/Qwen3.8-27B-vLLM")
-            for std_name in vllm_std_names:
-                if std_name not in names_to_register:
-                    names_to_register.append(std_name)
-        # A. Qwen 27B 系列
-        elif any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
-            for std_name in ("Qwen3.8-27B", "qwen3.8", "qwen-27b", "sglang-qwen-27b", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B"):
-                if std_name not in names_to_register:
-                    names_to_register.append(std_name)
-        # B. Qwen Flash 系列
-        elif any("flash" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
-            for std_name in ("Qwen3.8-Flash", "qwen3.8-flash", "qwen-flash", "sglang-qwen-flash", "Qwen/Qwen3.8-Flash-Next-FP8", "Qwen/Qwen3.8-Flash-Next"):
-                if std_name not in names_to_register:
-                    names_to_register.append(std_name)
-        # C. DeepSeek Flash 系列
-        elif any("deepseek" in n.lower() for n in names_to_register) and any("flash" in n.lower() for n in names_to_register):
-            for std_name in ("DeepSeek-V4-Flash", "deepseek-v4-flash", "deepseek-flash", "vllm-deepseek-flash", "deepseek-ai/DeepSeek-V4.1-Flash", "DeepSeek-V4.1-Flash", "deepseek-ai/DeepSeek-V4-Flash"):
-                if std_name not in names_to_register:
-                    names_to_register.append(std_name)
+        if claim == "production":
+            # 生產正名持有者：取得該系列完整生產別名組
+            if any("flash" in n.lower() for n in names_to_register + [ep.get("model_name", "")]) and any("qwen" in n.lower() for n in names_to_register + [ep.get("model_name", "")]):
+                for std_name in ("Qwen3.8-Flash", "qwen3.8-flash", "qwen-flash", "Qwen/Qwen3.8-Flash-Next-FP8", "Qwen/Qwen3.8-Flash-Next"):
+                    if std_name not in names_to_register:
+                        names_to_register.append(std_name)
+            elif any("27b" in n.lower() for n in names_to_register + [ep.get("model_name", "")]) and any("qwen" in n.lower() for n in names_to_register + [ep.get("model_name", "")]):
+                for std_name in ("Qwen3.8-27B", "qwen3.8", "qwen-27b", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B"):
+                    if std_name not in names_to_register:
+                        names_to_register.append(std_name)
+        elif claim != "isolated":
+            # 未聲明：依名稱自動判斷（向後相容）
+            # 智慧別名映射庫 (自動補齊常用代號與簡稱)
+            # A0. vLLM 對照組（A/B 測試命名空間隔離；必須優先於一般 Qwen 規則，
+            #     否則 -vLLM 後綴名會落入 A/B 規則、與 SGLang 引擎共用別名導致負載混合）
+            if any("vllm" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+                if any("flash" in n.lower() for n in names_to_register):
+                    vllm_std_names = ("Qwen3.8-Flash-Next-vLLM", "qwen-flash-vllm", "vllm-flash-next", "Qwen/Qwen3.8-Flash-Next-vLLM")
+                else:
+                    vllm_std_names = ("Qwen3.8-27B-vLLM", "vllm-qwen-27b", "Qwen/Qwen3.8-27B-vLLM")
+                for std_name in vllm_std_names:
+                    if std_name not in names_to_register:
+                        names_to_register.append(std_name)
+            # A. Qwen 27B 系列
+            elif any("27b" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+                for std_name in ("Qwen3.8-27B", "qwen3.8", "qwen-27b", "sglang-qwen-27b", "Qwen/Qwen3.8-27B-FP8", "Qwen/Qwen3.8-27B"):
+                    if std_name not in names_to_register:
+                        names_to_register.append(std_name)
+            # B. Qwen Flash 系列
+            elif any("flash" in n.lower() for n in names_to_register) and any("qwen" in n.lower() for n in names_to_register):
+                for std_name in ("Qwen3.8-Flash", "qwen3.8-flash", "qwen-flash", "sglang-qwen-flash", "Qwen/Qwen3.8-Flash-Next-FP8", "Qwen/Qwen3.8-Flash-Next"):
+                    if std_name not in names_to_register:
+                        names_to_register.append(std_name)
+            # C. DeepSeek Flash 系列
+            elif any("deepseek" in n.lower() for n in names_to_register) and any("flash" in n.lower() for n in names_to_register):
+                for std_name in ("DeepSeek-V4-Flash", "deepseek-v4-flash", "deepseek-flash", "vllm-deepseek-flash", "deepseek-ai/DeepSeek-V4.1-Flash", "DeepSeek-V4.1-Flash", "deepseek-ai/DeepSeek-V4-Flash"):
+                    if std_name not in names_to_register:
+                        names_to_register.append(std_name)
 
         model_ref = f"openai/{ep['model_path']}" if ep.get("model_path") else f"openai/{ep['model_name']}"
         api_key_target = f"os.environ/{ep.get('api_key_env', 'SGLANG_API_KEY')}"

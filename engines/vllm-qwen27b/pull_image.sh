@@ -21,16 +21,18 @@ CONTAINERS_DIR="/path/to/work/containers"
 FORCE_OVERWRITE=false
 VERSION_TAG=""
 DOCKER_URI=""
+POS_COUNT=0   # 以位置計數，不以變數是否為空判斷——空字串參數也佔一個位置
 for arg in "$@"; do
     case "$arg" in
         --force) FORCE_OVERWRITE=true ;;
-        *) if [ -z "$VERSION_TAG" ]; then VERSION_TAG="$arg"
-           elif [ -z "$DOCKER_URI" ]; then DOCKER_URI="$arg"
-           else
-               echo "❌ 多餘的參數：$arg（最多兩個：版本標籤、來源映像）" >&2
-               echo "   用法：$0 <版本標籤> [docker-image-uri] [--force]" >&2
-               exit 1
-           fi ;;
+        *) POS_COUNT=$((POS_COUNT + 1))
+           case "$POS_COUNT" in
+               1) VERSION_TAG="$arg" ;;
+               2) DOCKER_URI="$arg" ;;   # 空字串＝改用 config.env 的 CONTAINER_IMAGE
+               *) echo "❌ 多餘的參數：'$arg'（最多兩個：版本標籤、來源映像）" >&2
+                  echo "   用法：$0 <版本標籤> [docker-image-uri] [--force]" >&2
+                  exit 1 ;;
+           esac ;;
     esac
 done
 if [ -z "$VERSION_TAG" ] || [ "$VERSION_TAG" = "latest" ] || [ "$VERSION_TAG" = "nightly" ]; then
@@ -81,7 +83,7 @@ IMAGE_LAST="${IMAGE_REF##*/}"
 if [[ "$IMAGE_REF" == *@* ]]; then
     # digest 釘選：必須是 @sha256: 後接 64 位十六進位
     if ! [[ "$IMAGE_REF" =~ @sha256:[0-9a-f]{64}$ ]]; then
-        echo "❌ digest 格式錯誤（$DOCKER_IMAGE）：須為 @sha256:<64 位十六進位>。" >&2
+        echo "❌ digest 格式錯誤（$DOCKER_IMAGE）：須為 @sha256:<64 位小寫十六進位>。" >&2
         exit 1
     fi
 else
@@ -110,6 +112,7 @@ rm -f "$MANIFEST"   # --force 重抓時，舊 manifest 不可留著冒充新內�
 
 # 先各自取值並檢查，再寫暫存檔、更名：任一步失敗都不留下空欄位的 manifest
 manifest_fail() {
+    rm -f "${MANIFEST}.tmp" 2>/dev/null || true   # 清不掉也不可蓋過真正的錯誤訊息
     echo "❌ $1——SIF 已拉取但 manifest 未寫入，請修正後重跑（加 --force）：$TARGET_SIF" >&2
     exit 1
 }
@@ -117,12 +120,13 @@ PULLED_AT="$(date -Is)" || manifest_fail "無法取得時間"
 [ -n "$PULLED_AT" ] || manifest_fail "取得的時間為空"
 SIF_SHA256="$(sha256sum "$TARGET_SIF" | awk '{print $1}')" || manifest_fail "無法計算 SHA-256"
 [[ "$SIF_SHA256" =~ ^[0-9a-f]{64}$ ]] || manifest_fail "SHA-256 格式異常（$SIF_SHA256）"
-{
-    echo "source=$DOCKER_IMAGE"
-    echo "version_tag=$VERSION_TAG"
-    echo "pulled_at=$PULLED_AT"
-    echo "sif_sha256=$SIF_SHA256"
-} > "${MANIFEST}.tmp" || manifest_fail "無法寫入 manifest"
+# 單一 printf 一次寫完：多個 echo 的區塊只回傳最後一個狀態，前面寫入失敗會被掩蓋
+printf '%s\n' \
+    "source=$DOCKER_IMAGE" \
+    "version_tag=$VERSION_TAG" \
+    "pulled_at=$PULLED_AT" \
+    "sif_sha256=$SIF_SHA256" \
+    > "${MANIFEST}.tmp" || manifest_fail "無法寫入 manifest"
 mv -f "${MANIFEST}.tmp" "$MANIFEST" || manifest_fail "無法更名 manifest"
 echo "🧾 來源與 SHA-256 已記錄：$MANIFEST"
 

@@ -1,5 +1,6 @@
 ---
 name: model-onboarding
+license: MIT
 description: >-
   評估 Hugging Face 模型能否部署到 NCHC H200 參集：當使用者貼上 HF 模型 URL
   並要求評估可行性、選擇 vLLM 或 SGLang、docker image 版本、啟動參數，

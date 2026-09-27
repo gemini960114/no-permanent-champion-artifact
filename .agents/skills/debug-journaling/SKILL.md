@@ -1,5 +1,6 @@
 ---
 name: debug-journaling
+license: MIT
 description: >-
   修復記錄紀律：在修復任何 bug、設定錯誤、踩坑或完成效能調校之後、
   宣稱完成之前使用。規定教訓必須寫入對應文件（docs/、KNOWN_GOOD、

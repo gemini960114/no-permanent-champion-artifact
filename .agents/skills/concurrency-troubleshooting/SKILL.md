@@ -1,5 +1,6 @@
 ---
 name: concurrency-troubleshooting
+license: MIT
 description: >-
   高併發失敗診斷與容量調校：當壓力測試或對外服務出現大量失敗時使用——
   症狀如 Errno 24 Too many open files、ReadError 連線中斷、ReadTimeout

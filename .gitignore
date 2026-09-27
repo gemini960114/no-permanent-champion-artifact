@@ -159,3 +159,7 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 .bash_history
+
+# agent 環境專屬設定（本機）
+.claude/
+.roo/

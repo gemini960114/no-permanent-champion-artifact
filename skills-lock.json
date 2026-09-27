@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "academic-writing-skills": {
+      "source": "gemini960114/skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/academic-writing-skills/SKILL.md",
+      "computedHash": "7dc55ff7015e608b70bb6629102acc7f6036cda3d53b98f0fd922584394f88f8"
+    },
+    "arxiv": {
+      "source": "gemini960114/skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/arxiv/SKILL.md",
+      "computedHash": "e41af5df50a8ed1a3dda7fb7fb971a02f779e983023a3b27db5b37a0333fe1a4"
+    },
+    "science-research-writing": {
+      "source": "gemini960114/skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/science-research-writing/SKILL.md",
+      "computedHash": "fea53df3d70b8689f716a3f946a7a491315c1e9d619606ddfc67182217c8b69c"
+    },
+    "scientific-writing": {
+      "source": "gemini960114/skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/scientific-writing/SKILL.md",
+      "computedHash": "4a1d1795a7584b886f83fbe48a7a3ec47dfd60ed390b68feefb31f261a508f38"
+    }
+  }
+}

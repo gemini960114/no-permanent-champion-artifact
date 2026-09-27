@@ -288,12 +288,32 @@ We built a multi-model API service on an HPC cluster—a LiteLLM gateway over Sl
 
 ---
 
-*Raw per-run statistics (JSON) for all configurations in Tables 4–9—except the initial 67.9% mixed run, which is recorded in the platform's operations documentation—are available in `benchmarks/results/` of the platform repository (https://github.com/gemini960114/litellm-proxy). Engine configurations are recorded in `engines/KNOWN_GOOD.md`. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (`.agents/skills/`); the manuscript-writing skills are released at https://github.com/gemini960114/skills-hub (provenance locked in `skills-lock.json`).*
+*Raw per-run statistics (JSON) for all configurations in Tables 4–9—except the initial 67.9% mixed run, which is recorded in the platform's operations documentation—are available in `benchmarks/results/` of the platform repository (https://github.com/gemini960114/litellm-proxy). Engine configurations are recorded in `engines/KNOWN_GOOD.md`. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (`.agents/skills/`); the manuscript-writing skills are released at https://github.com/gemini960114/skills-hub (provenance locked in `skills-lock.json`). The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by immutable version tags), and it does not preserve the agent sessions' verbatim prompts.*
+
+## Author Contributions
+
+**Chao-Chun Chuang:** Conceptualization, Methodology, Software, Investigation, Formal analysis, and Writing — original draft. **Po-Hsiang Lin:** Investigation, Data curation, Validation, and Writing — review and editing.
+
+## Funding
+
+This work was supported in part by the National Science and Technology Council (NSTC), Taiwan, under Grant Nos. NSTC 115-2410-H-A49-046-MY3 and NSTC 114-2634-F-006-002.
+
+## Competing Interests
+
+The authors declare that they have no competing interests.
 
 ## Acknowledgments
 
-The authors thank the National Center for High-performance Computing for the computing resources and operational support used in this work.
+The authors gratefully acknowledge the National Center for High-performance Computing (NCHC), National Institutes of Applied Research (NIAR), Taiwan, for providing the research resources, computational infrastructure, and platform services that supported this work.
 
 ## AI-Use Disclosure
 
-The experiments reported in this paper were executed by LLM-based coding agents following the versioned procedures ("skills") described in Section 3, under the direction and release decisions of the human authors. The manuscript itself—including literature retrieval and verification against the arXiv API, structural drafting from writing-methodology skills, and evidence-alignment auditing—was drafted with the assistance of such agents (the agent used for the final revision was opencode, powered by GLM-5.3), and an independent LLM agent performed three rounds of adversarial review whose findings are incorporated above. All quantitative results originate from the measurements of Sections 4–5; every claim was checked against the raw result files or, for the initial mixed-run figure, the operations documentation; and the human authors reviewed and approved the final manuscript and take full responsibility for its content. Consistent with arXiv and conference policy, no AI system is listed as an author.
+**Research execution.** The experiments reported in this paper—engine deployment, benchmarking, failure diagnosis, and production traffic switching—were executed by LLM-based coding agents following the versioned procedures ("skills") described in Section 3, under the direction and release decisions of the human authors. The agent used for the final revision was opencode, powered by GLM-5.3.
+
+**Literature search and verification.** The literature search, and the verification of every arXiv identifier and author list, were performed by an agent against the arXiv API. This process had a disclosed failure mode: an intermediate reference-conversion pass introduced incorrect author lists in five entries, which were caught and corrected during independent external review—a known transcription-error class for AI-assisted literature verification. Responsibility for reference accuracy rests with the authors.
+
+**Manuscript drafting.** The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; an independent LLM agent performed four rounds of external review (three adversarial content reviews and one pre-submission checklist) whose findings are incorporated above.
+
+**Human role.** Problem framing, platform and release decisions, verdict approval, and funding were raised and confirmed by the human authors. The corresponding author is responsible for final verification of the principal numerical results, calculations, and claim–citation links.
+
+**A disclosed limit of this disclosure.** The experimental phases ran across multiple agent sessions whose verbatim prompts and model versions were not preserved as timestamped transcripts; the skills, engine configurations, raw result files, job records, and commit history are released, but this disclosure cannot provide call-by-call detail. Consistent with arXiv and conference policy, no AI system is listed as an author, and the human authors take full responsibility for the manuscript's content.

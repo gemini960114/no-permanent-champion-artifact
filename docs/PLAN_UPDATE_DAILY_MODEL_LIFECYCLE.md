@@ -6,7 +6,7 @@
 > [!NOTE]
 > **文件狀態：Phase 1A（Endpoint Registry、Port 原子鎖、三態對帳合成與雙向清理機制）已實作並完成實體驗收（經同節點雙 Job 418623/418624 現場實測通過）。**  
 > 更新日期：2026-09-22  
-> **成果簡述**：已完成「POSIX 原生原子目錄鎖 (`mkdir`) 探測 Port」、「端點登錄庫 (`runtime/endpoints/`)」、「Controller 設定合成器 (`scripts/generate_runtime_config.py`)」、「端點生命週期三態自動對帳清理」與「同機多實例連接埠避讓與清理現場實測」。完整技術細節與測試記錄請參閱 [WALKTHROUGH_PHASE1A.md](./WALKTHROUGH_PHASE1A.md)；相關維運與部署操作請參閱 [README.md](../README.md)。
+> **成果簡述**：已完成「POSIX 原生原子目錄鎖 (`mkdir`) 探測 Port」、「端點登錄庫 (`runtime/endpoints/`)」、「Controller 設定合成器 (`scripts/generate_runtime_config.py`)」、「端點生命週期三態自動對帳清理」與「同機多實例連接埠避讓與清理現場實測」。相關維運與部署操作請參閱 [README.zh-TW.md](../README.zh-TW.md)。
 
 ## 1. 背景與目標
 

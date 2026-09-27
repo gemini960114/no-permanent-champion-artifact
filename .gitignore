@@ -186,3 +186,12 @@ paper/*.out
 # paper-pipeline skill 未完成評測，暫不入庫（與寫作 skills 同政策）
 .agents/skills/paper-pipeline/
 __pycache__/
+
+# ==== 不公開的內部文件與論文中間討論（本機保留、不進版控） ====
+# 內部主管報告與階段驗收紀錄
+docs/EXEC_SUMMARY_BENCHMARKS.md
+docs/WALKTHROUGH_PHASE1A.md
+# 論文審查意見、回覆與中間討論稿
+paper/review-*
+paper/*-review*.md
+paper/drafts/

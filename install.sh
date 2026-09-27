@@ -80,7 +80,7 @@ echo "  $VERSION_INFO"
 
 # 5. 檢查推論引擎容器環境 (純 Singularity 零安裝架構，引擎位於 engines/)
 echo "▶ 檢查推論引擎環境..."
-SIF_FILE="/path/to/work/containers/sglang_latest.sif"
+SIF_FILE="/path/to/work/containers/sglang_0.5.19.sif"
 if [ -f "$SIF_FILE" ]; then
     echo "  ✅ 找到 SGLang 容器映像檔: $SIF_FILE"
 else

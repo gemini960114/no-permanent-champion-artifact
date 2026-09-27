@@ -12,7 +12,31 @@ if [ -f "$SCRIPT_DIR/config.env" ]; then
 fi
 
 CONTAINERS_DIR="/path/to/work/containers"
-TARGET_SIF="${SIF_PATH:-${CONTAINERS_DIR}/sglang_flash_latest.sif}"
+# ==== Image 版本政策 C：版本化檔名輸出，永不覆蓋既有 SIF ====
+# 用法：./pull_image.sh <版本標籤> [docker-image-uri] [--force]
+#   輸出檔名 = <框架>_<版本標籤>.sif（例：sglang_0.29.2.sif）
+#   已存在的 SIF 一律拒絕覆蓋（--force 才允許）——舊版永遠留磁碟 standby
+#   切換引擎：改 config.env 的 SIF_PATH → ./validate_engine.sh → 更新 KNOWN_GOOD.md
+FORCE_OVERWRITE=false
+VERSION_TAG=""
+DOCKER_URI=""
+for arg in "$@"; do
+    case "$arg" in
+        --force) FORCE_OVERWRITE=true ;;
+        *) if [ -z "$VERSION_TAG" ]; then VERSION_TAG="$arg"; else DOCKER_URI="$arg"; fi ;;
+    esac
+done
+if [ -z "$VERSION_TAG" ] || [ "$VERSION_TAG" = "latest" ] || [ "$VERSION_TAG" = "nightly" ]; then
+    echo "❌ 請指定具體版本標籤（浮動標籤無法回溯，是版本政策 C 禁止的覆蓋風險源）：" >&2
+    echo "   用法：$0 <版本標籤> [docker-image-uri]   例：$0 0.29.2" >&2
+    exit 1
+fi
+TARGET_SIF="${CONTAINERS_DIR}/sglang_${VERSION_TAG}.sif"
+if [ -f "$TARGET_SIF" ] && [ "$FORCE_OVERWRITE" != true ]; then
+    echo "❌ $TARGET_SIF 已存在——版本政策 C 不覆蓋（舊版 standby）。" >&2
+    echo "   換一個版本標籤，或確認重抓必要性後加 --force。" >&2
+    exit 1
+fi
 # ⚠️ 警告：本引擎與 sglang-qwen-flash「共用」同一 image 檔 (SGLang 0.5.20)。
 # 執行本腳本會重建/覆蓋該檔——重建後請以 validate_engine.sh 重新驗證所有共用引擎，
 # 並更新 engines/KNOWN_GOOD.md 的版本登記。
@@ -57,3 +81,9 @@ echo ""
 echo "✅ 容器拉取與轉換完成: $TARGET_SIF"
 echo "💡 請確認 sglang-qwen-flash/config.env 中 SIF_PATH 設定如下："
 echo "   SIF_PATH=$TARGET_SIF"
+
+echo ""
+echo "📋 版本政策 C：切換步驟（引擎不會自動改用新 SIF）"
+echo "   ① engines/<引擎>/config.env 改 SIF_PATH=${CONTAINERS_DIR}/sglang_${VERSION_TAG}.sif"
+echo "   ② ./validate_engine.sh <引擎>（煙霧驗證，最終裁決）"
+echo "   ③ 更新 engines/KNOWN_GOOD.md 登記實測版本；舊 SIF 保留 standby"

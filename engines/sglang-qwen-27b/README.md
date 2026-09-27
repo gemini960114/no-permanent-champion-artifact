@@ -1,6 +1,6 @@
 # SGLang Qwen3.8-27B on H200 (1x GPU) 部署與維運手冊
 
-本目錄整合了從 `/path/to/work/models/opentwbench` 提取並最佳化的高性能推論引擎架構，專門用於在 NCHC H200 超算叢集上，以 **單卡 GPU (1 Core H200)** 搭配 **純 Singularity 容器映像檔 (`sglang_latest.sif`)** 部署 `Qwen/Qwen3.8-27B` 深度思考推理大模型服務。
+本目錄整合了從 `/path/to/work/models/opentwbench` 提取並最佳化的高性能推論引擎架構，專門用於在 NCHC H200 超算叢集上，以 **單卡 GPU (1 Core H200)** 搭配 **純 Singularity 容器映像檔 (`sglang_0.5.19.sif`)** 部署 `Qwen/Qwen3.8-27B` 深度思考推理大模型服務。
 
 > **🏆 實績（2026-09-27 SGLang vs vLLM 同模型 A/B 對決冠軍）**：官方基準配置（cap 128）500 人×500 tok 壓測 **100%／3,823 tok/s／P95 51.8s**，勝 vLLM 對照組（[`engines/vllm-qwen27b`](../vllm-qwen27b/)）6.3%；EAGLE 投機解碼實測 -40%（高併發不建議）。完整戰報見 [`benchmarks/README.md`](../../benchmarks/README.md)。
 
@@ -32,7 +32,7 @@
 > * **❌ 不需要手動編譯 FlashInfer 或 Triton CUDA 算子**
 > 
 > **核心理由**：所有重度深度學習環境（Python 3.12、SGLang 核心、PyTorch 2.13.0+cu130、FlashInfer、Triton GDN 算子、Mamba 快取模組等）均已預先打包封裝於唯讀容器映像檔：
-> 📁 `/path/to/work/containers/sglang_latest.sif` (12GB)
+> 📁 `/path/to/work/containers/sglang_0.5.19.sif` (12GB)
 > 
 > 宿主機（Host）只需要使用系統內建的 `/usr/bin/singularity`（Apptainer 1.4.3）執行 SLURM 批次任務，即可直接開箱運行。下載模型部分亦採用隨選即跑的 `uvx` 工具，完全無需在宿主機全域環境安裝套件。
 
@@ -164,7 +164,7 @@ curl -X POST "http://127.0.0.1:4000/v1/chat/completions" \
 | `SLURM_GPUS` | `1` | 申請 GPU 數量（`--gres=gpu:H200:1`） |
 | `SLURM_CPUS` | `12` | 搭配之 CPU 核心數 |
 | `SLURM_MEM` | `120G` | 搭配之主記憶體容量 |
-| `SIF_PATH` | `/path/to/work/containers/sglang_latest.sif` | Singularity SIF 容器映像檔路徑 |
+| `SIF_PATH` | `/path/to/work/containers/sglang_0.5.19.sif` | Singularity SIF 容器映像檔路徑 |
 | `PORT` | `30000` | SGLang API 監聽連接埠 |
 | `KV_CACHE_DTYPE` | `fp8_e4m3` | KV Cache 採用 FP8 格式以節省顯存並加大並發能力 |
 | `MEM_FRACTION` | `0.85` | 靜態佔用 GPU 顯存比例（H200 約劃分 122GB） |
@@ -184,7 +184,7 @@ curl -X POST "http://127.0.0.1:4000/v1/chat/completions" \
 ## 關鍵技術踩坑與最佳實踐 (Troubleshooting)
 
 1. **容器映像檔純淨性**：
-   * `/path/to/work/containers/sglang_latest.sif` 為純原裝映像檔，**完全不需要在裡面額外安裝任何套件**。內部已自建 Python 3.12、SGLang、FlashInfer、Triton 與 Mamba 算子。
+   * `/path/to/work/containers/sglang_0.5.19.sif` 為純原裝映像檔，**完全不需要在裡面額外安裝任何套件**。內部已自建 Python 3.12、SGLang、FlashInfer、Triton 與 Mamba 算子。
 2. **Singularity 驅動相容性**：
    * 計算節點上必須優先使用宿主機的 `/usr/bin/singularity`（Apptainer 1.4.3），不可隨意引用 `/work/envstack/...` 的舊版執行檔，以確保完整相容 **NVIDIA Driver 580.65 / CUDA 13.0**。
 3. **工作目錄權限 (`mkdir logs: Permission denied`)**：

@@ -116,7 +116,31 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 
 ---
 
-## 5. 生產流量切換（ALIAS_CLAIM 設定檔開關）
+## 5. Image 版本政策 C（版本化檔名＋漸進遷移）
+
+> 2026-09-27 起實施。原則：**新版用新檔名進場、舊版永遠留磁碟 standby、引擎各自遷移**。
+> 「曾支援」不等於「永遠支援」（框架會砍舊架構、旗標會改、kernel 版本耦合）——
+> 換版一律以 `validate_engine.sh` 煙霧測試為最終裁決。
+
+```bash
+# 拉新版（版本標籤必填；浮動標籤 latest/nightly 一律拒絕）
+cd engines/<引擎> && ./pull_image.sh <版本標籤> [docker-image-uri]
+# → 輸出 /path/to/work/containers/<框架>_<版本標籤>.sif（已存在則拒絕，--force 才覆蓋）
+
+# 切換引擎（自願制，逐一遷移）
+#   ① config.env 改 SIF_PATH=<新檔名>
+#   ② ./validate_engine.sh <引擎>
+#   ③ 更新 engines/KNOWN_GOOD.md；舊 SIF 保留 standby
+
+# 回退（30 秒）
+#   config.env 改回舊 SIF_PATH → 重啟引擎
+```
+
+現存版本檔案：`sglang_0.5.20.sif`（27b/flash/glm53 共用）、`vllm_0.29.1rc1.sif`
+（qwen27b/flash-next 共用）、`sglang_0.5.19.sif`（備援，無現役引擎）。
+不相關容器已移至 `containers/bk/`。
+
+## 6. 生產流量切換（ALIAS_CLAIM 設定檔開關）
 
 同模型雙框架（如 `sglang-qwen-flash` vs `vllm-flash-next`）的生產流量歸屬，由各引擎
 `config.env` 的 `ALIAS_CLAIM` 聲明控制——**引擎不用重啟，改 config 後重啟 Gateway 即生效**
@@ -140,7 +164,7 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 注意：`isolated` 引擎的 MODEL_ALIAS 必須是後綴名（不可與生產別名組撞名，否則 litellm
 會將同名 deployment 負載平衡混流）。
 
-## 6. 疑難排解（實際踩過的坑）
+## 7. 疑難排解（實際踩過的坑）
 
 | 症狀 | 原因 | 解法 |
 | :--- | :--- | :--- |
@@ -154,7 +178,7 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 
 ---
 
-## 7. 與其他文件的關係
+## 8. 與其他文件的關係
 
 | 文件 | 內容 |
 | :--- | :--- |

@@ -52,7 +52,7 @@ docker build（實錄：GLM-5.3-Flash 的 vLLM Recipe 存在，但要求 vLLM 0.
 ```
 - 模型檔存在＝必要非充分條件，最終以 Step 6 煙霧測試為準
 - 無原生支援 → 查上游收錄版本，建議重拉 image 並版本釘選（避免 `latest`）
-- **重拉共用 image 會影響共用該 image 的其他引擎**（重新驗證＋更新 KNOWN_GOOD）
+- **重拉 image 一律走版本政策 C**：`./pull_image.sh <版本標籤>` 輸出新檔名、永不覆蓋既有 SIF（舊版 standby）；引擎切換＝config.env 改 SIF_PATH→validate→更新 KNOWN_GOOD（詳 ENGINE_LIFECYCLE_GUIDE §5）
 
 ### Step 3：硬體適配計算（跑腳本）
 ```bash

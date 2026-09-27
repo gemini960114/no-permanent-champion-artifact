@@ -2,8 +2,11 @@
 
 > **目的**：記錄每個引擎「驗證過的 image 版本 × 權重 × 啟動參數」組合。
 > 新模型上線前先查此表找最接近的原型；image 版本更換後**必須重新驗證**並更新本表。
-> **識別規則**：image 以「框架 + 版本號」識別（例：SGLang 0.5.20），不以 SIF 檔名
-> （`*_latest.sif` 僅為檔名，實際版本以下表為準——檔名不改是為了避免中斷現行 config.env）。
+> **識別規則（版本政策 C，2026-09-27 起）**：SIF 檔名即版本（`sglang_0.5.20.sif`、
+> `vllm_0.29.1rc1.sif`）——**新版用新檔名進場、永不覆蓋**（`pull_image.sh` 內建拒絕
+> 邏輯，`--force` 才允許）；舊版留磁碟 standby（回退＝config.env 改一行 SIF_PATH）；
+> 引擎逐一遷移（改 SIF_PATH → `validate_engine.sh` → 更新本表）。「曾支援」不等於
+> 「永遠支援」——每次換版都以煙霧測試為最終裁決。
 > 完整操作手冊（每日開退場、驗證、疑難排解）見
 > [docs/ENGINE_LIFECYCLE_GUIDE.md](../docs/ENGINE_LIFECYCLE_GUIDE.md)。
 
@@ -13,11 +16,11 @@
 
 | 引擎目錄 | 模型 | 框架 / 實測版本 | image (SIF) | 權重大小 | 硬體 | 驗證狀態 |
 | :--- | :--- | :--- | :--- | :---: | :---: | :--- |
-| `sglang-qwen-27b` | Qwen/Qwen3.8-27B-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif`（共用） | 52 GB | 1×H200 (TP1) | ✅ 運行中；A/B R1 冠軍 3,823 tok/s（2026-09-27） |
-| `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中（**熱備援** `qwen3.8-flash-sglang`）；A/B 第二戰 3,925 tok/s（敗 vLLM 2.01×，2026-09-27） |
-| `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
-| `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中（**生產正名 `qwen3.8-flash`**，2026-09-27 切換）；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議） |
-| `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
+| `sglang-qwen-27b` | Qwen/Qwen3.8-27B-FP8 | SGLang **0.5.20** | `sglang_0.5.20.sif`（共用） | 52 GB | 1×H200 (TP1) | ✅ 運行中；A/B R1 冠軍 3,823 tok/s（2026-09-27） |
+| `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_0.5.20.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中（**熱備援** `qwen3.8-flash-sglang`）；A/B 第二戰 3,925 tok/s（敗 vLLM 2.01×，2026-09-27） |
+| `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_0.29.1rc1.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
+| `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_0.29.1rc1.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中（**生產正名 `qwen3.8-flash`**，2026-09-27 切換）；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議） |
+| `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_0.5.20.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
 
 ---
 
@@ -27,7 +30,7 @@
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `sglang_flash_latest.sif`（SGLang **0.5.20**，2026-09-27 自 0.5.19 升級——官方 Cookbook 建議最新版） |
+| image | `sglang_0.5.20.sif`（SGLang **0.5.20**，2026-09-27 自 0.5.19 升級——官方 Cookbook 建議最新版） |
 | 權重 | `/path/to/work/models/Qwen3.8-27B`（52 GB，BF16） |
 | 平行 | TP=1（**支援同主機多實例**，埠 30000 起跳，LiteLLM 自動負載平衡） |
 | 基準參數 | 官方 SGLang Cookbook H200 單卡基準：kv fp8_e4m3、mem-fraction 0.85、flashinfer、chunked-prefill 32768、qwen3/qwen3_coder parser（7/7 與官方一致） |
@@ -39,7 +42,7 @@
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `sglang_flash_latest.sif`（docker `lmsysorg/sglang:latest`，SIF 轉檔 2026-09-22，內含 SGLang **0.5.20**） |
+| image | `sglang_0.5.20.sif`（docker `lmsysorg/sglang:latest`，SIF 轉檔 2026-09-22，內含 SGLang **0.5.20**） |
 | 權重 | `/path/to/work/models/Qwen3.8-Flash-Next-FP8`（173 GB，hybrid Mamba 架構） |
 | 平行 | TP=4 + EP=4 |
 | 投機解碼 | NEXTN（3 步預測、Eagle Top-K=1、4 draft tokens） |
@@ -51,7 +54,7 @@
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `vllm_latest.sif`（SIF 轉檔 2026-09-22，內含 vLLM **0.29.1rc1.dev452** 開發版；registry 實測已映射 `Qwen3_5ForConditionalGeneration → qwen3_5.py`） |
+| image | `vllm_0.29.1rc1.sif`（SIF 轉檔 2026-09-22，內含 vLLM **0.29.1rc1.dev452** 開發版；registry 實測已映射 `Qwen3_5ForConditionalGeneration → qwen3_5.py`） |
 | 權重 | `/path/to/work/models/Qwen3.8-27B`（52 GB，**與 sglang-qwen-27b 共享**，零下載） |
 | 平行 | TP=1（與 SGLang 27B 對等的 A/B 對決對照組，埠 36000） |
 | 基準參數 | 官方 vLLM Recipe（recipes.vllm.ai/Qwen/Qwen3.8-27B）：kv fp8、`--max-model-len 262144`、`--reasoning-parser qwen3`（官方明言不可省）、`--tool-call-parser qwen3_xml`、`--max-num-seqs 128`（與 SGLang R1 cap 對等） |
@@ -63,7 +66,7 @@
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `vllm_latest.sif`（vLLM **0.29.1rc1.dev452**；registry 實測已映射 `Qwen4ExpForConditionalGeneration → vllm.models.qwen4_exp`＋`Qwen4ExpMTP`） |
+| image | `vllm_0.29.1rc1.sif`（vLLM **0.29.1rc1.dev452**；registry 實測已映射 `Qwen4ExpForConditionalGeneration → vllm.models.qwen4_exp`＋`Qwen4ExpMTP`） |
 | 權重 | `/path/to/work/models/Qwen3.8-Flash-Next-FP8`（173 GB，**與 sglang-qwen-flash 共享**，零下載） |
 | 平行 | TP4＋`--enable-expert-parallel`（**TEP4——純 TP 與 FP8 128-寬量化塊不相容**，官方 Recipe 明載）＋`--moe-backend triton` |
 | 基準參數 | 官方 Recipe H200 章節：`--gpu-memory-utilization 0.85`、`--max-num-seqs 256`（低於此值 mamba-cache 啟動錯誤）、prefix caching、`--no-enable-flashinfer-autotune`、qwen3/qwen3_coder parser |
@@ -80,7 +83,7 @@
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `sglang_flash_latest.sif`（SGLang 0.5.20，實測已內建 `step3p5.py`／`step3p5_mtp.py` 原生支援） |
+| image | `sglang_0.5.20.sif`（SGLang 0.5.20，實測已內建 `step3p5.py`／`step3p5_mtp.py` 原生支援） |
 | 權重 | `Step-5-Preview-FP8`（~604 GB，官方 FP8 尚未釋出；BF16 版 1.21TB 超出 8×H200 與磁碟已排除） |
 | 平行 | TP=8 + EP=8（單節點 8×H200 = 1,128GB，KV 餘 ~520GB） |
 | 關鍵參數 | `--context-length 262144`（官方 1M 為理想值）、`--reasoning-parser step3p5`（⚠️ model card 寫 `stepfun`，實測 0.5.20 DetectorMap 無此選項）、`--trust-remote-code`、`--mem-fraction-static 0.90`、`MAX_RUNNING_REQUESTS=64`（初始） |

@@ -10,7 +10,7 @@
 | :--- | :--- |
 | [官方 vLLM Recipe](https://recipes.vllm.ai/Qwen/Qwen3.8-Flash-Next) | H200 章節：**TEP＋`--moe-backend triton`**（純 TP 與 FP8 128-寬量化塊不相容）、`--max-num-seqs 256`（低於此值會 mamba-cache 啟動錯誤）、prefix caching、關 flashinfer-autotune |
 | [官方 Model Card](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) | 架構 `qwen4_exp`（180B 總參／6B 激活）、thinking 預設開啟（` Müd` 標記）、262K context |
-| vLLM image 實測 | `vllm_latest.sif`（0.29.1rc1.dev452）registry 已映射 `Qwen4ExpForConditionalGeneration → vllm.models.qwen4_exp`＋`Qwen4ExpMTP`（投機解碼） |
+| vLLM image 實測 | `vllm_0.29.1rc1.sif`（0.29.1rc1.dev452）registry 已映射 `Qwen4ExpForConditionalGeneration → vllm.models.qwen4_exp`＋`Qwen4ExpMTP`（投機解碼） |
 
 ## 服務參數（R1 陽春版）
 

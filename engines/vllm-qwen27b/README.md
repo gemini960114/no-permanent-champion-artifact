@@ -9,7 +9,7 @@
 | :--- | :--- |
 | [官方 vLLM Recipe](https://recipes.vllm.ai/Qwen/Qwen3.8-27B) | kv fp8、`--reasoning-parser qwen3`（官方明言「實務上不可省」）、`--tool-call-parser qwen3_xml`、MTP 投機解碼 |
 | [官方 Model Card](https://huggingface.co/Qwen/Qwen3.8-27B) | 架構 `Qwen3_5ForConditionalGeneration`（vLLM 0.17.0+ 原生支援）、262K context、thinking 預設開啟 |
-| vLLM image 實測 | `vllm_latest.sif`（0.29.1rc1.dev452）registry 已映射 `Qwen3_5ForConditionalGeneration → qwen3_5.py` |
+| vLLM image 實測 | `vllm_0.29.1rc1.sif`（0.29.1rc1.dev452）registry 已映射 `Qwen3_5ForConditionalGeneration → qwen3_5.py` |
 
 ## 服務參數（R1 陽春版）
 

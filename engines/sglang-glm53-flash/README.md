@@ -57,7 +57,7 @@ cd /path/to/work/github/litellm-proxy
 ## ⚠️ 注意事項
 
 - **GPU 佔用**：本引擎 8×H200；與 flash（4）＋27b（1）同時運行需叢集 13 GPU 餘裕
-- **共用 image**：與 flash 共用 `sglang_flash_latest.sif`——重建 image 會同時影響兩者
+- **共用 image**：與 flash 共用 `sglang_0.5.20.sif`——重建 image 會同時影響兩者
   （`pull_image.sh` 已加警告，重建後需雙引擎重驗）
 - **多模態**：圖片／影片請求端到端未驗證（skill 規定煙霧測試需補帶圖請求）；
   影片功能需 image 內含 `torchcodec`（未驗證）

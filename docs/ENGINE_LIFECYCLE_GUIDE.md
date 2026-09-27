@@ -87,7 +87,7 @@ cd /path/to/work/github/litellm-proxy
 #              避免依賴 :latest 浮動 tag；版本登記於 KNOWN_GOOD.md）
 
 # ③ 下載權重與 image
-cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
+cd engines/my-model && ./download_model.sh && ./pull_image.sh <版本標籤> <docker-image-uri> && cd ../..   # 來源須為固定標籤或 @sha256
 
 # ④ 驗證（不耗 GPU 的靜態檢查 → 煙霧啟動）
 ./validate_engine.sh my-model            # 已在運行則直測現有實例
@@ -124,7 +124,7 @@ cd engines/my-model && ./download_model.sh && ./pull_image.sh && cd ../..
 
 ```bash
 # 拉新版（版本標籤必填；浮動標籤 latest/nightly 一律拒絕）
-cd engines/<引擎> && ./pull_image.sh <版本標籤> [docker-image-uri]
+cd engines/<引擎> && ./pull_image.sh <版本標籤> <docker-image-uri>   # 未給 URI 時改用 config.env 的 CONTAINER_IMAGE；:latest/:nightly/無標籤一律拒絕；完成後寫 <sif>.manifest（來源＋SHA-256）
 # → 輸出 /path/to/work/containers/<框架>_<版本標籤>.sif（已存在則拒絕，--force 才覆蓋）
 
 # 切換引擎（自願制，逐一遷移）

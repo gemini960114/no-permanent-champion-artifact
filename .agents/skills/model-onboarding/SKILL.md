@@ -68,12 +68,12 @@ docker build（實錄：GLM-5.3-Flash 的 vLLM Recipe 存在，但要求 vLLM 0.
   新模型上門 → check_engine_support.sh 查「現有 image」
     ├─ ✅ 支援   → 沿用現有 SIF（零下載；既有引擎零影響）
     └─ ❌ 不支援 → 依 Recipe/Cookbook 查「最低支援版本」
-                   → ./pull_image.sh <版本標籤>（新檔名進場，永不覆蓋）
+                   → ./pull_image.sh <版本標籤> <docker-image-uri>（新檔名進場，永不覆蓋；來源須為固定標籤或 @sha256）
   既有已驗證引擎 → 一律不自動升級（沿用原版；升級＝自願＋逐一切換＋重新驗證）
   ```
   注意「最低支援版本」優先於「最新版」（KNOWN_GOOD 選版原則）——支援在 0.5.20.3
   就進了卻拉 0.5.21，只是多引入未驗證的變數。
-- **重拉 image 一律走版本政策 C**：`./pull_image.sh <版本標籤>` 輸出新檔名、永不覆蓋既有 SIF（舊版 standby）；引擎切換＝config.env 改 SIF_PATH→validate→更新 KNOWN_GOOD（詳 ENGINE_LIFECYCLE_GUIDE §5）
+- **重拉 image 一律走版本政策 C**：`./pull_image.sh <版本標籤> <docker-image-uri>` 輸出新檔名、永不覆蓋既有 SIF（舊版 standby）；來源不得為 :latest/:nightly，完成後寫 `<sif>.manifest` 記錄來源與 SHA-256；引擎切換＝config.env 改 SIF_PATH→validate→更新 KNOWN_GOOD（詳 ENGINE_LIFECYCLE_GUIDE §5）
 
 ### Step 3：硬體適配計算（跑腳本）
 ```bash

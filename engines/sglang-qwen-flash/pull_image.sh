@@ -14,6 +14,7 @@ fi
 CONTAINERS_DIR="/path/to/work/containers"
 # ==== Image 版本政策 C：版本化檔名輸出，永不覆蓋既有 SIF ====
 # 用法：./pull_image.sh <版本標籤> [docker-image-uri] [--force]
+#   來源映像：第 2 個參數，未給則用 config.env 的 CONTAINER_IMAGE；兩者皆無則拒絕（不再預設下載 nightly/latest）
 #   輸出檔名 = <框架>_<版本標籤>.sif（例：sglang_0.29.2.sif）
 #   已存在的 SIF 一律拒絕覆蓋（--force 才允許）——舊版永遠留磁碟 standby
 #   切換引擎：改 config.env 的 SIF_PATH → ./validate_engine.sh → 更新 KNOWN_GOOD.md
@@ -28,7 +29,7 @@ for arg in "$@"; do
 done
 if [ -z "$VERSION_TAG" ] || [ "$VERSION_TAG" = "latest" ] || [ "$VERSION_TAG" = "nightly" ]; then
     echo "❌ 請指定具體版本標籤（浮動標籤無法回溯，是版本政策 C 禁止的覆蓋風險源）：" >&2
-    echo "   用法：$0 <版本標籤> [docker-image-uri]   例：$0 0.29.2" >&2
+    echo "   用法：$0 <版本標籤> <docker-image-uri>" >&2
     exit 1
 fi
 TARGET_SIF="${CONTAINERS_DIR}/sglang_${VERSION_TAG}.sif"
@@ -61,7 +62,23 @@ if [ -z "$PULL_BIN" ]; then
     exit 1
 fi
 
-DOCKER_IMAGE="${1:-${CONTAINER_IMAGE:-docker://lmsysorg/sglang:qwen38flashnext}}"
+# 來源映像必須明確指定（第 2 個參數，或 config.env 的 CONTAINER_IMAGE），且不得為浮動標籤：
+# 檔名上的版本標籤只是名稱，SIF 的實際內容由來源決定；預設下載 nightly/latest 會讓同名 SIF 內容無法追溯。
+DOCKER_IMAGE="${DOCKER_URI:-${CONTAINER_IMAGE:-}}"
+if [ -z "$DOCKER_IMAGE" ]; then
+    echo "❌ 請明確指定來源映像（第 2 個參數，或 config.env 的 CONTAINER_IMAGE）：" >&2
+    echo "   用法：$0 <版本標籤> <docker-image-uri>   例：$0 <版本> docker://<repo>:<固定版本標籤>" >&2
+    exit 1
+fi
+IMAGE_REF="${DOCKER_IMAGE#*://}"
+IMAGE_LAST="${IMAGE_REF##*/}"
+if [[ "$IMAGE_REF" != *@sha256:* ]]; then
+    if [[ "$IMAGE_LAST" != *:* ]] || [[ "$IMAGE_LAST" == *:latest ]] || [[ "$IMAGE_LAST" == *:nightly ]]; then
+        echo "❌ 來源映像不可為浮動標籤（$DOCKER_IMAGE）：同一標籤日後可能指向不同內容。" >&2
+        echo "   請改用固定版本標籤，或以 @sha256:<digest> 指定。" >&2
+        exit 1
+    fi
+fi
 
 echo "=========================================================="
 echo " 🚀 開始拉取並建構支援 Qwen-Flash-Next 的 SGLang 容器"
@@ -73,6 +90,16 @@ echo " 💡 轉換時間約需 10~15 分鐘，請耐心等候..."
 echo "=========================================================="
 
 "$PULL_BIN" pull -F "$TARGET_SIF" "$DOCKER_IMAGE"
+
+# 記錄來源與內容雜湊：版本標籤只是檔名，這份 manifest 才能回溯 SIF 的實際內容
+MANIFEST="${TARGET_SIF}.manifest"
+{
+    echo "source=$DOCKER_IMAGE"
+    echo "version_tag=$VERSION_TAG"
+    echo "pulled_at=$(date -Is)"
+    echo "sif_sha256=$(sha256sum "$TARGET_SIF" | awk '{print $1}')"
+} > "$MANIFEST"
+echo "🧾 來源與 SHA-256 已記錄：$MANIFEST"
 
 echo ""
 echo "✅ 容器拉取與轉換完成: $TARGET_SIF"

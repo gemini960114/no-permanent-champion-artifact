@@ -56,7 +56,7 @@ cd /path/to/work/github/litellm-proxy
 ### 驗收檢查點
 - `start_models.sh` 輸出 `READY` 且 Gateway 健康檢查通過
 - `/v1/models` 應列出預期模型（例：15 個＝Portal 3＋27B 家族＋flash 家族）
-- 外部路徑（VM 隧道）抽測：`curl http://VM_PUBLIC_IP:4000/v1/models -H "Authorization: Bearer <金鑰>"`
+- 外部路徑（HTTPS）抽測：`curl https://service.example.org/v1/models -H "Authorization: Bearer <金鑰>"`
 
 ### 下市（釋放 GPU）
 
@@ -217,6 +217,7 @@ cd engines/<引擎> && ./submit_slurm.sh -a <計畫代號>
 | 文件 | 內容 |
 | :--- | :--- |
 | [README.md](../README.md) | 對外連線方式、安全設計、指令速查 |
+| [docs/DAILY_OPS_RUNBOOK.md](./DAILY_OPS_RUNBOOK.md) | 每日開關機與驗收 SOP（本手冊的快速操作版） |
 | [engines/KNOWN_GOOD.md](../engines/KNOWN_GOOD.md) | 已驗證配方登記表（image 版本 × 參數 × 實績） |
 | [docs/HPC_LITELLM_GATEWAY_ARCHITECTURE.md](./HPC_LITELLM_GATEWAY_ARCHITECTURE.md) | 整體架構設計 |
 | [docs/PLAN_UPDATE_DAILY_MODEL_LIFECYCLE.md](./PLAN_UPDATE_DAILY_MODEL_LIFECYCLE.md) | 生命週期底層機制（兩階段發布、Port 原子鎖、三態對帳） |

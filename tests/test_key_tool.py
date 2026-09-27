@@ -109,6 +109,50 @@ class TestKeyTool(unittest.TestCase):
         mode = stat.S_IMODE(os.stat(self.keys_file).st_mode)
         self.assertEqual(mode, 0o600)
 
+    def test_rate_limit_roundtrip_and_update(self):
+        """--rpm/--tpm 寫入金鑰庫、update 可調整、0=不限額 (None)"""
+        r = self._run("generate", "--name", "dave", "--models", "all",
+                      "--rpm", "3000", "--tpm", "10000000")
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+        with open(self.keys_file, "r", encoding="utf-8") as f:
+            keys = json.load(f)
+        info = next(iter(keys.values()))
+        self.assertEqual(info["rpm_limit"], 3000)
+        self.assertEqual(info["tpm_limit"], 10000000)
+
+        # update 調整限額＋模型白名單
+        the_key = next(iter(keys))
+        r = self._run("update", "--key", the_key, "--rpm", "600", "--tpm", "0",
+                      "--models", "qwen-27b", "glm5.3-flash")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(self.keys_file, "r", encoding="utf-8") as f:
+            keys = json.load(f)
+        self.assertEqual(keys[the_key]["rpm_limit"], 600)
+        self.assertIsNone(keys[the_key]["tpm_limit"], "0 應存為不限額 (None)")
+        self.assertEqual(keys[the_key]["models"], ["qwen-27b", "glm5.3-flash"])
+
+        # update --models all → 恢復全部
+        r = self._run("update", "--key", the_key, "--models", "all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(self.keys_file, "r", encoding="utf-8") as f:
+            self.assertEqual(json.load(f)[the_key]["models"], ["all"])
+
+        # 未指定金鑰不存在 → 非 0 退出
+        r = self._run("update", "--key", "sk-nonexistent", "--rpm", "1")
+        self.assertNotEqual(r.returncode, 0)
+
+    def test_legacy_keys_have_no_limits(self):
+        """舊格式金鑰 (無 rpm_limit/tpm_limit 欄位)：list 應正常顯示為不限額"""
+        legacy = {"sk-legacy0000000000000000000000000000": {
+            "user_id": "legacy-user", "models": ["all"],
+            "description": "old", "created_at": "2026-01-01 00:00:00"}}
+        with open(self.keys_file, "w", encoding="utf-8") as f:
+            json.dump(legacy, f)
+        r = self._run("list")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("不限額", r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

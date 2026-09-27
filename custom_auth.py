@@ -85,11 +85,20 @@ async def user_api_key_auth(request: Request, api_key: str) -> UserAPIKeyAuth:
                     }
                 )
 
+        # 速率限制 (key_tool.py --rpm/--tpm 設定；LiteLLM 以記憶體計數器強制執行，超過回 429)
+        def _int_or_none(v):
+            try:
+                return int(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
         return UserAPIKeyAuth(
             api_key=api_key,
             user_id=info.get("user_id", "internal_user"),
             models=[] if is_all_models else allowed_models,
             user_role=LitellmUserRoles.INTERNAL_USER,
+            rpm_limit=_int_or_none(info.get("rpm_limit")),
+            tpm_limit=_int_or_none(info.get("tpm_limit")),
         )
 
     raise HTTPException(

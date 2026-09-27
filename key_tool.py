@@ -4,8 +4,16 @@ LiteLLM 多金鑰管理工具 (key_tool.py)
 用法：
   python key_tool.py generate --name "Alice" --models all
   python key_tool.py generate --name "Bob" --models GLM-5.2 Kimi-K3
+  python key_tool.py generate --name "Carol" --rpm 3000 --tpm 10000000
+  python key_tool.py update   --key <API_KEY> --rpm 600 --tpm 2000000
   python key_tool.py list
+  python key_tool.py list --show-full
   python key_tool.py revoke --key <API_KEY>
+
+速率限制 (由 Gateway 記憶體計數器強制執行，超過回 HTTP 429)：
+  --rpm  每分鐘請求數上限 (預設 3000)
+  --tpm  每分鐘 token 數上限 (預設 10,000,000)
+  傳 0 表示不限額。既有未設限之金鑰維持不限額 (向後相容)。
 """
 
 import argparse
@@ -69,6 +77,15 @@ def mask_key(k: str) -> str:
         return "****"
     return f"{k[:7]}...{k[-4:]}"
 
+def norm_limit(v):
+    """0 或負值 → None (不限額)；正整數照存。"""
+    if v is None:
+        return None
+    return v if v > 0 else None
+
+def fmt_limit(v) -> str:
+    return "不限額" if v is None else f"{v:,}"
+
 def cmd_generate(args):
     with keys_lock():
         keys = load_keys()
@@ -84,6 +101,8 @@ def cmd_generate(args):
         keys[new_key] = {
             "user_id": args.name,
             "models": models,
+            "rpm_limit": norm_limit(args.rpm),
+            "tpm_limit": norm_limit(args.tpm),
             "description": args.desc or f"Key for {args.name}",
             "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
@@ -92,8 +111,38 @@ def cmd_generate(args):
     print("\n✅ 成功建立新 API Key！")
     print(f"  • 使用者名稱 : {args.name}")
     print(f"  • 授權模型   : {models_desc}")
+    print(f"  • RPM 上限   : {fmt_limit(keys[new_key]['rpm_limit'])} (每分鐘請求數)")
+    print(f"  • TPM 上限   : {fmt_limit(keys[new_key]['tpm_limit'])} (每分鐘 token 數)")
     print(f"  • API Key    : {new_key}")
-    print("  • 存放位置   : api_keys.json (chmod 600)\n")
+    print("  • 存放位置   : api_keys.json (chmod 600)")
+    print("  • 對外 URL   : https://service.example.org/v1\n")
+
+def cmd_update(args):
+    with keys_lock():
+        keys = load_keys()
+        if args.key not in keys:
+            print(f"\n❌ 找不到指定的 API Key: {args.key}\n")
+            sys.exit(1)
+        info = keys[args.key]
+        changed = []
+        if args.rpm is not None:
+            info["rpm_limit"] = norm_limit(args.rpm)
+            changed.append(f"RPM={fmt_limit(info['rpm_limit'])}")
+        if args.tpm is not None:
+            info["tpm_limit"] = norm_limit(args.tpm)
+            changed.append(f"TPM={fmt_limit(info['tpm_limit'])}")
+        if args.models is not None:
+            models = args.models
+            if "all" in models or "*" in models:
+                models = ["all"]
+            info["models"] = models
+            changed.append(f"模型={'所有 (ALL)' if models == ['all'] else ', '.join(models)}")
+        if not changed:
+            print("\nℹ️  未指定任何更新 (--rpm / --tpm / --models 至少給一個)\n")
+            sys.exit(1)
+        save_keys(keys)
+    print(f"\n✅ 已更新 [{info.get('user_id')}] 的設定：{'、'.join(changed)}")
+    print("  ℹ️  設定由 Gateway 讀取 api_keys.json 生效 (最遲下一個請求；如未生效請 ./start_background.sh)\n")
 
 def cmd_list(args):
     keys = load_keys()
@@ -108,6 +157,7 @@ def cmd_list(args):
         print(f"  使用者   : {info.get('user_id')}")
         print(f"  API Key  : {display_key}")
         print(f"  授權模型 : {models_str}")
+        print(f"  速率限制 : RPM {fmt_limit(info.get('rpm_limit'))} / TPM {fmt_limit(info.get('tpm_limit'))}")
         print(f"  建立時間 : {info.get('created_at')}")
         print("-" * 70)
     if not getattr(args, "show_full", False) and keys:
@@ -133,8 +183,19 @@ def main():
     gen_parser = subparsers.add_parser("generate", help="生成新 API Key")
     gen_parser.add_argument("--name", "-n", required=True, help="使用者名稱或專案標籤")
     gen_parser.add_argument("--models", "-m", nargs="+", default=["all"], help="授權模型清單 (預設 all)")
+    gen_parser.add_argument("--rpm", type=int, default=3000, help="每分鐘請求數上限 (預設 3000；0=不限額)")
+    gen_parser.add_argument("--tpm", type=int, default=10000000, help="每分鐘 token 數上限 (預設 10,000,000；0=不限額)")
     gen_parser.add_argument("--desc", "-d", default="", help="備註說明")
     gen_parser.set_defaults(func=cmd_generate)
+
+    # update
+    upd_parser = subparsers.add_parser("update", help="更新既有金鑰（限額／模型白名單）")
+    upd_parser.add_argument("--key", "-k", required=True, help="目標 API Key")
+    upd_parser.add_argument("--rpm", type=int, default=None, help="每分鐘請求數上限 (0=不限額)")
+    upd_parser.add_argument("--tpm", type=int, default=None, help="每分鐘 token 數上限 (0=不限額)")
+    upd_parser.add_argument("--models", "-m", nargs="+", default=None,
+                            help="模型白名單 (空白分隔多個名稱；all=全部)。清單同時決定該金鑰 /v1/models 看到的模型")
+    upd_parser.set_defaults(func=cmd_update)
 
     # list
     list_parser = subparsers.add_parser("list", help="列出所有已建立的 API Key")

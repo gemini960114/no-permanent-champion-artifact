@@ -96,7 +96,7 @@ cd engines/<新引擎> && grep -vE "^#|^$" config.env   # 檢視非註解行
 | 必看欄位 | 說明 |
 | :--- | :--- |
 | `MODEL_NAME` / `MODEL_ALIAS` | HF repo 名／對外別名（別名＝使用者請求時填的 model） |
-| `SIF_PATH` | image 路徑——共用 image 時**不要**跑 `pull_image.sh`（會覆蓋其他引擎的 image） |
+| `SIF_PATH` | image 路徑——共用 image 時不需要跑 `pull_image.sh`；腳本預設拒絕覆寫既有 SIF，**不要**對共用 image 加 `--force`（會同時影響其他引擎） |
 | `SGLANG_API_KEY` | 引擎內部金鑰——scaffold 時自動沿用共用值，通常不用動 |
 | `HF_TOKEN` | **gated 模型必須**（先去 HF 網頁接受條款）；**非 gated 建議帶**（避免匿名限流，大檔下載更穩）。scaffold 沿用前引擎的值 |
 | `TP`/`EP`/`PORT`/`MEM_FRACTION` | 評估報告建議值，通常已填好 |

@@ -12,11 +12,11 @@ if [ -f "$SCRIPT_DIR/config.env" ]; then
 fi
 
 CONTAINERS_DIR="/path/to/work/containers"
-# ==== Image 版本政策 C：版本化檔名輸出，永不覆蓋既有 SIF ====
+# ==== Image 版本政策 C：版本化檔名輸出，預設不覆蓋既有 SIF ====
 # 用法：./pull_image.sh <版本標籤> [docker-image-uri] [--force]
 #   來源映像：第 2 個參數，未給則用 config.env 的 CONTAINER_IMAGE；兩者皆無則拒絕（不再預設下載 nightly/latest）
 #   輸出檔名 = <框架>_<版本標籤>.sif（例：vllm_0.29.2.sif）
-#   已存在的 SIF 一律拒絕覆蓋（--force 才允許）——舊版永遠留磁碟 standby
+#   已存在的 SIF 預設拒絕覆蓋（--force 才允許，並重寫 manifest）——舊版預設留磁碟 standby
 #   切換引擎：改 config.env 的 SIF_PATH → ./validate_engine.sh → 更新 KNOWN_GOOD.md
 FORCE_OVERWRITE=false
 VERSION_TAG=""
@@ -24,7 +24,13 @@ DOCKER_URI=""
 for arg in "$@"; do
     case "$arg" in
         --force) FORCE_OVERWRITE=true ;;
-        *) if [ -z "$VERSION_TAG" ]; then VERSION_TAG="$arg"; else DOCKER_URI="$arg"; fi ;;
+        *) if [ -z "$VERSION_TAG" ]; then VERSION_TAG="$arg"
+           elif [ -z "$DOCKER_URI" ]; then DOCKER_URI="$arg"
+           else
+               echo "❌ 多餘的參數：$arg（最多兩個：版本標籤、來源映像）" >&2
+               echo "   用法：$0 <版本標籤> [docker-image-uri] [--force]" >&2
+               exit 1
+           fi ;;
     esac
 done
 if [ -z "$VERSION_TAG" ] || [ "$VERSION_TAG" = "latest" ] || [ "$VERSION_TAG" = "nightly" ]; then
@@ -72,9 +78,16 @@ if [ -z "$DOCKER_IMAGE" ]; then
 fi
 IMAGE_REF="${DOCKER_IMAGE#*://}"
 IMAGE_LAST="${IMAGE_REF##*/}"
-if [[ "$IMAGE_REF" != *@sha256:* ]]; then
-    if [[ "$IMAGE_LAST" != *:* ]] || [[ "$IMAGE_LAST" == *:latest ]] || [[ "$IMAGE_LAST" == *:nightly ]]; then
-        echo "❌ 來源映像不可為浮動標籤（$DOCKER_IMAGE）：同一標籤日後可能指向不同內容。" >&2
+if [[ "$IMAGE_REF" == *@* ]]; then
+    # digest 釘選：必須是 @sha256: 後接 64 位十六進位
+    if ! [[ "$IMAGE_REF" =~ @sha256:[0-9a-f]{64}$ ]]; then
+        echo "❌ digest 格式錯誤（$DOCKER_IMAGE）：須為 @sha256:<64 位十六進位>。" >&2
+        exit 1
+    fi
+else
+    IMAGE_TAG="${IMAGE_LAST#*:}"
+    if [[ "$IMAGE_LAST" != *:* ]] || [ -z "$IMAGE_TAG" ] || [ "$IMAGE_TAG" = "latest" ] || [ "$IMAGE_TAG" = "nightly" ]; then
+        echo "❌ 來源映像須帶固定版本標籤（$DOCKER_IMAGE）：無標籤、空標籤或 latest/nightly 日後可能指向不同內容。" >&2
         echo "   請改用固定版本標籤，或以 @sha256:<digest> 指定。" >&2
         exit 1
     fi
@@ -89,16 +102,28 @@ echo " 🔹 快取路徑: $CACHE_DIR"
 echo " 💡 轉換時間約需 10~15 分鐘，請耐心等候..."
 echo "=========================================================="
 
-"$PULL_BIN" pull -F "$TARGET_SIF" "$DOCKER_IMAGE"
-
 # 記錄來源與內容雜湊：版本標籤只是檔名，這份 manifest 才能回溯 SIF 的實際內容
 MANIFEST="${TARGET_SIF}.manifest"
+rm -f "$MANIFEST"   # --force 重抓時，舊 manifest 不可留著冒充新內容
+
+"$PULL_BIN" pull -F "$TARGET_SIF" "$DOCKER_IMAGE"
+
+# 先各自取值並檢查，再寫暫存檔、更名：任一步失敗都不留下空欄位的 manifest
+manifest_fail() {
+    echo "❌ $1——SIF 已拉取但 manifest 未寫入，請修正後重跑（加 --force）：$TARGET_SIF" >&2
+    exit 1
+}
+PULLED_AT="$(date -Is)" || manifest_fail "無法取得時間"
+[ -n "$PULLED_AT" ] || manifest_fail "取得的時間為空"
+SIF_SHA256="$(sha256sum "$TARGET_SIF" | awk '{print $1}')" || manifest_fail "無法計算 SHA-256"
+[[ "$SIF_SHA256" =~ ^[0-9a-f]{64}$ ]] || manifest_fail "SHA-256 格式異常（$SIF_SHA256）"
 {
     echo "source=$DOCKER_IMAGE"
     echo "version_tag=$VERSION_TAG"
-    echo "pulled_at=$(date -Is)"
-    echo "sif_sha256=$(sha256sum "$TARGET_SIF" | awk '{print $1}')"
-} > "$MANIFEST"
+    echo "pulled_at=$PULLED_AT"
+    echo "sif_sha256=$SIF_SHA256"
+} > "${MANIFEST}.tmp" || manifest_fail "無法寫入 manifest"
+mv -f "${MANIFEST}.tmp" "$MANIFEST" || manifest_fail "無法更名 manifest"
 echo "🧾 來源與 SHA-256 已記錄：$MANIFEST"
 
 echo ""

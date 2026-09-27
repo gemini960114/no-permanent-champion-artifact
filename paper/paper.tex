@@ -257,23 +257,24 @@ Table~\ref{tab:synthesis} and Figure~\ref{fig:throughput} collect the headline r
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-  width=0.95\textwidth, height=7.2cm,
-  ybar, bar width=9pt,
+  width=0.92\textwidth, height=7.5cm,
+  ybar, bar width=10pt,
   symbolic x coords={Dense 27B, Ultra-sparse MoE, KDA MoE},
   xtick=data,
-  ymin=0, ymax=9000,
+  ymin=0, ymax=9600,
   ylabel={Aggregate throughput (\tps)},
-  legend style={at={(0.5,-0.16)}, anchor=north, legend columns=4, font=\small, /tikz/every even column/.append style={column sep=0.35cm}},
+  ymajorgrids=true, grid style={black!12},
+  legend style={at={(0.02,0.98)}, anchor=north west, legend columns=2, font=\scriptsize, draw=black!30, fill=white, fill opacity=0.85},
   nodes near coords={\pgfmathprintnumber\pgfplotspointmeta},
-  every node near coord/.append style={font=\scriptsize, rotate=90, anchor=west},
-  enlarge x limits=0.13,
+  every node near coord/.append style={font=\tiny, rotate=90, anchor=west},
+  enlarge x limits=0.15,
 ]
-\addplot coordinates {(Dense 27B,3823) (Ultra-sparse MoE,3383) (KDA MoE,3669)};
-\addplot coordinates {(Dense 27B,2306) (Ultra-sparse MoE,3925) (KDA MoE,3135)};
-\addplot coordinates {(Dense 27B,3597) (Ultra-sparse MoE,7886) (KDA MoE,2857)};
-\addplot coordinates {(Dense 27B,3034) (Ultra-sparse MoE,4282) (KDA MoE,2066)};
+\addplot[bar shift=-15pt, draw=blue!40!black, fill=blue!65] coordinates {(Dense 27B,3823) (Ultra-sparse MoE,3383) (KDA MoE,3669)};
+\addplot[bar shift=-5pt, draw=blue!40!black, fill=blue!30] coordinates {(Dense 27B,2306) (Ultra-sparse MoE,3925) (KDA MoE,3135)};
+\addplot[bar shift=5pt, draw=orange!50!black, fill=orange!75] coordinates {(Dense 27B,3597) (Ultra-sparse MoE,7886) (KDA MoE,2857)};
+\addplot[bar shift=15pt, draw=orange!50!black, fill=orange!35] coordinates {(Dense 27B,3034) (Ultra-sparse MoE,4282)};
+\addplot[forget plot, bar shift=15pt, draw=orange!50!black, pattern=north east lines, pattern color=orange!55!black] coordinates {(KDA MoE,2066)};
 \legend{SGLang R1, SGLang R2 (spec.), vLLM R1, vLLM R2 (spec.)}
-\addplot[forget plot, draw=black!60, pattern=north east lines, pattern color=black!60, bar shift=13.5pt] coordinates {(KDA MoE,2066)};
 \end{axis}
 \end{tikzpicture}
 \caption{Aggregate throughput of the three battles (values from Tables~\ref{tab:dense-r1}--\ref{tab:kda}). R2 denotes speculative decoding enabled. The \emph{hatched} bar (vLLM R2 on the KDA model) is a censored measurement: 85.6\% success, work truncated at 623k tokens (Section~\ref{sec:method}).}
@@ -380,7 +381,7 @@ The authors gratefully acknowledge the National Center for High-performance Comp
 
 \section*{Data and Artifact Availability}
 
-The platform repository is available at \url{https://github.com/gemini960114/litellm-proxy}. Raw per-run statistics (JSON) for all configurations in Tables~\ref{tab:dense-r1}--\ref{tab:reliability}---except the initial 67.9\% mixed run, which is recorded in the platform's operations documentation---are available in its \texttt{benchmarks/\allowbreak results/} directory. Engine configurations are recorded in \texttt{engines/KNOWN\_GOOD.md}. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (\texttt{.agents/skills/}); the manuscript-writing skills are released at \url{https://github.com/gemini960114/skills-hub} (provenance locked in \texttt{skills-lock.json}). The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by immutable version tags), and it does not preserve the agent sessions' verbatim prompts.
+The platform repository is available at \url{https://github.com/gemini960114/litellm-proxy}. Raw per-run statistics (JSON) for all configurations in Tables~\ref{tab:dense-r1}--\ref{tab:reliability}---except the initial 67.9\% mixed run, which is recorded in the platform's operations documentation---are available in its \texttt{benchmarks/\allowbreak results/} directory. Engine configurations are recorded in \texttt{engines/KNOWN\_GOOD.md}. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) and the manuscript-writing skills are released with the platform repository (\texttt{.agents/skills/}; provenance locked in \texttt{skills-lock.json}). The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by immutable version tags), and it does not preserve the agent sessions' verbatim prompts.
 
 \bibliographystyle{unsrtnat}
 \bibliography{refs}

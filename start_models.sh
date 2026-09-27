@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 一鍵啟動指定地端模型引擎 → 等待就緒 → 啟動 Gateway (start_models.sh)
-# 用法：./start_models.sh <引擎目錄名>...   可指定多個
+# 用法：./start_models.sh [--account <計畫代號>] <引擎目錄名>...   可指定多個
 #       ./start_models.sh --list           列出所有可用引擎
 # 範例：./start_models.sh sglang-qwen-27b sglang-qwen-flash
+#       ./start_models.sh --account your-slurm-account vllm-glm53-flash   指定 wallet 計畫代號計費
 # 流程：對每個指定引擎 (1) 已在運行 → 跳過 (2) 執行該目錄 submit_slurm.sh
 #       送出 Slurm job → 等待 endpoint STATE=ready → 最後啟動 Gateway
 #       (start_background.sh)。未指定的引擎不會被啟動，也不需任何排除設定。
@@ -49,8 +50,9 @@ list_engines() {
 }
 
 usage() {
-    echo "用法：$0 <引擎目錄名>...    例：$0 sglang-qwen-27b sglang-qwen-flash"
+    echo "用法：$0 [--account <計畫代號>] <引擎目錄名>...   例：$0 sglang-qwen-27b sglang-qwen-flash"
     echo "      $0 --list            列出所有可用引擎"
+    echo "      $0 --account your-slurm-account vllm-glm53-flash   （指定 wallet 計畫代號計費）"
     list_engines
     exit 1
 }
@@ -60,6 +62,24 @@ usage() {
 # ------------------------------------------------------------------------------
 [ $# -ge 1 ] || usage
 if [ "${1:-}" = "--list" ]; then list_engines; exit 0; fi
+
+# Wallet／計畫資源代號（SLURM_ACCOUNT）：未指定時沿用各引擎 config.env 的預設
+# （現為 your-slurm-account）；指定時以 -a 覆蓋，消耗對應計畫的額度
+WALLET_ACCOUNT=""
+ENGINES_TO_START=()
+while [ $# -ge 1 ]; do
+    case "$1" in
+        --account)
+            if [ $# -ge 2 ]; then WALLET_ACCOUNT="$2"; shift 2; else echo "❌ --account 需要計畫代號（例：--account your-slurm-account）" >&2; exit 1; fi
+            ;;
+        *) ENGINES_TO_START+=("$1"); shift ;;
+    esac
+done
+[ ${#ENGINES_TO_START[@]} -ge 1 ] || usage
+if [ -n "$WALLET_ACCOUNT" ]; then
+    echo "💳 Wallet／計畫資源代號：${WALLET_ACCOUNT}（本次啟動的引擎將消耗此計畫額度）"
+fi
+set -- "${ENGINES_TO_START[@]}"
 
 # 節點安全檢查：Gateway 記錄於其他節點時，本機無法停止它 (PID 為節點區域)
 CURRENT_NODE="$(hostname -s)"
@@ -93,12 +113,17 @@ for ENGINE in "$@"; do
     fi
 
     echo "🚀 $ENGINE：派送 Slurm job..."
-    SUBMIT_OUT=$(cd "$ENGINE_DIR" && ./submit_slurm.sh 2>&1) || {
+    if [ -n "$WALLET_ACCOUNT" ]; then
+        SUBMIT_OUT=$(cd "$ENGINE_DIR" && ./submit_slurm.sh -a "$WALLET_ACCOUNT" 2>&1)
+    else
+        SUBMIT_OUT=$(cd "$ENGINE_DIR" && ./submit_slurm.sh 2>&1)
+    fi
+    if [ $? -ne 0 ]; then
         echo "❌ $ENGINE：派送失敗"
         echo "$SUBMIT_OUT" | sed 's/^/    /'
         FAILED=1
         continue
-    }
+    fi
     JOB_ID=$(echo "$SUBMIT_OUT" | grep -oE 'Submitted batch job [0-9]+' | grep -oE '[0-9]+' | head -1)
     if [ -z "$JOB_ID" ]; then
         echo "❌ $ENGINE：無法解析 Job ID"

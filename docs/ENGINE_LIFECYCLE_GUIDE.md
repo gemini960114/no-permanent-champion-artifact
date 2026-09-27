@@ -140,7 +140,41 @@ cd engines/<引擎> && ./pull_image.sh <版本標籤> [docker-image-uri]
 （qwen27b/flash-next 共用）、`sglang_0.5.19.sif`（備援，無現役引擎）。
 不相關容器已移至 `containers/bk/`。
 
-## 6. 生產流量切換（ALIAS_CLAIM 設定檔開關）
+## 6. Wallet／計畫資源代號（SLURM_ACCOUNT）與生產啟動建議
+
+### 6.1 Wallet（計畫資源代號）
+
+NCHC 的 GPU 消費以**計畫代號**（project／wallet，如 `your-slurm-account`）計費——引擎啟動
+佔用的 GPU 時數會消耗指定計畫的額度。**計畫代號可於啟動時指定**：
+
+```bash
+./start_models.sh --account <計畫代號> <引擎>...   # 指定 wallet 計費
+# 例：./start_models.sh --account your-slurm-account vllm-glm53-flash
+
+# 單引擎直啟亦可：
+cd engines/<引擎> && ./submit_slurm.sh -a <計畫代號>
+```
+
+| 規則 | 說明 |
+| :--- | :--- |
+| 未指定時 | 沿用各引擎 `config.env` 的 `SLURM_ACCOUNT`（現為 `your-slurm-account`） |
+| 指定 `--account`／`-a` | 以指令行覆蓋（sbatch `--account` 優先於 slurm 腳本 header），消耗指定計畫額度 |
+| 查詢 | `sacct -j <JobID> -o JobID,Account` 可回查每個 job 實際計費的計畫 |
+
+### 6.2 生產啟動建議（A/B 三戰實測最佳選項）
+
+| 模型 | 建議引擎 | 關鍵配置 | 依據 |
+| :--- | :--- | :--- | :--- |
+| `qwen-27b` | `sglang-qwen-27b` | R1 陽春（cap 128、無投機） | A/B #1 冠軍：3,823 vs vLLM 3,597（+6%） |
+| `qwen3.8-flash` | `vllm-flash-next` | **R1 陽春（TEP4、無 MTP）** | A/B #2 冠軍：7,886 vs SGLang 3,925（**+101%**）；已切生產（ALIAS_CLAIM） |
+| `glm5.3-flash` | `sglang-glm53-flash` | **MTP 關閉**＋cap 128 | A/B #3 冠軍：3,669 vs vLLM 2,857（+28%）；MTP 關閉再 +18% |
+
+> 依據詳 `benchmarks/README.md` 三戰戰報；**投機解碼（MTP/NEXTN/EAGLE）在三個模型的
+> 高併發實測中皆為淨損或僅小幅增益**——除非低併發延遲場景，生產一律關閉。
+> SGLang 版 flash（`qwen3.8-flash-sglang`）與 vLLM 版 27B／GLM（`*-vllm`）為
+> 熱備援／對照組，依 ALIAS_CLAIM 機制隨時可切換（見下節）。
+
+## 7. 生產流量切換（ALIAS_CLAIM 設定檔開關）
 
 同模型雙框架（如 `sglang-qwen-flash` vs `vllm-flash-next`）的生產流量歸屬，由各引擎
 `config.env` 的 `ALIAS_CLAIM` 聲明控制——**引擎不用重啟，改 config 後重啟 Gateway 即生效**
@@ -164,7 +198,7 @@ cd engines/<引擎> && ./pull_image.sh <版本標籤> [docker-image-uri]
 注意：`isolated` 引擎的 MODEL_ALIAS 必須是後綴名（不可與生產別名組撞名，否則 litellm
 會將同名 deployment 負載平衡混流）。
 
-## 7. 疑難排解（實際踩過的坑）
+## 8. 疑難排解（實際踩過的坑）
 
 | 症狀 | 原因 | 解法 |
 | :--- | :--- | :--- |
@@ -178,7 +212,7 @@ cd engines/<引擎> && ./pull_image.sh <版本標籤> [docker-image-uri]
 
 ---
 
-## 8. 與其他文件的關係
+## 9. 與其他文件的關係
 
 | 文件 | 內容 |
 | :--- | :--- |

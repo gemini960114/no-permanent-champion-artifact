@@ -402,3 +402,57 @@ embedding＋512 專家 ultra-sparse MoE，180B 總參／6B 激活）上再戰—
 | `bench_ab_sglang_flash_r2.json` | SGLang R2（NEXTN 3/1/4） |
 | `bench_ab_vllm_flash_r1.json` | vLLM R1（陽春，=其最佳配置） |
 | `bench_ab_vllm_flash_r2.json` | vLLM R2（MTP×3） |
+
+## ⚔️ SGLang vs vLLM 同模型 A/B 對決・第三戰：GLM-5.3-Flash（2026-09-27）
+
+**動機**：GLM-5.3-Flash 的 vLLM Recipe 上線（原評估記錄「vLLM 無支援」已過時），
+新增 `engines/vllm-glm53-flash`（TEP8、埠 38000、**專用 image `vllm_glm53-flash.sif`**
+＝vLLM 官方認證 build，依版本政策 C 新檔名進場），與 `sglang-glm53-flash`
+共享本地 FP8 權重（306GB，零下載）。
+
+### 🎯 對決條件
+
+| 項目 | 設定 |
+| :--- | :--- |
+| 權重 | **同一份** `GLM-5.3-Flash`（306GB 原生 FP8） |
+| 硬體 | 各 8×H200（TP8+EP8 vs TEP8）；vLLM 用專用 image 0.28.1rc1.dev580（含預編譯 GLM kernel），SGLang 0.5.20 |
+| 併發 | 雙邊 cap 128；⚠️ Hopper 不支援此模型 FP8 KV → vLLM 用 BF16 KV（Recipe 明載） |
+| 負載 | 1000 人×800 tok，經正式隧道；工作量 732k~734k tokens（各輪一致 ✓） |
+
+### 📈 結果（四宮格）
+
+| 配置 | SGLang 0.5.20 | vLLM 0.28.1rc1（專用 build） | 勝負 |
+| :--- | :--- | :--- | :--- |
+| R1 陽春（無投機） | **3,669 tok/s**／P95 192.5s／100% | 2,857 tok/s／P95 251.0s／100% | **SGLang +28%** |
+| R2 投機解碼 | 3,135（MTP EAGLE 5/1/6，**-15%**） | 2,066（MTP5，**-28%**，成功率僅 **85.6%** ReadTimeout） | SGLang +52% |
+| **各自最佳** | **3,669**（不開 MTP） | 2,857（不開 MTP） | **SGLang +28%** |
+
+### 💡 工程解讀
+
+1. **三戰總結論：框架優勢由架構決定，沒有永久冠軍**——27B dense（qwen3_5）SGLang +6%、
+   Flash-Next ultra-sparse MoE（qwen4_exp）vLLM +133%、GLM KDA＋sparse MLA（glm5_next）
+   SGLang +28%。新模型上架前**必須雙框架實測**（model-onboarding skill Step 4 制度）。
+2. **GLM 上雙框架的 MTP 都是淨損**（SGLang -15%、vLLM -28%＋可靠性崩壞 85.6%）——
+   與 Flash-Next（SGLang NEXTN +16%）相反：GLM 18B 激活解碼較重，
+   高併發算力飽和下 draft+verify 開銷蓋過增益。
+3. **生產改進落地**：原 SGLang GLM 生產配置開 MTP（實測 3,057~3,135 tok/s）——
+   **關閉後 3,669（+18%）**，已於本輪直接套用（config 註解保留 MTP 參數與決策依據）。
+4. **專用 image 教訓**：通用 nightly（0.29.1rc1）跑 GLM 撞 TRT-LLM deep_gemm cubin
+   斷言＋FlashInfer autotune 掛死 31 分鐘——官方專用 tag（`vllm/vllm-openai:glm53-flash`）
+   一次解決。**疑難雜症先查官方專用 build**（Recipe 的 "use docker" 提示）。
+
+### 🔧 過程修復
+
+- **拉取失敗三連**：登入節點 NFS unlink 競態（"directory not empty"）→ 改用**計算節點
+  slurm job 拉取**（dev 分區、本地 /tmp 暫存）一次成功——大型 image 拉取一律走計算節點。
+- **FlashInfer autotune 掛死**：scancel 殘留的共享 autotune 快取＋autotune 本身掛住 →
+  清快取＋`--no-enable-flashinfer-autotune`（Flash-Next Recipe 同款處理）。
+- **JSON 引號三度犯**：config.env 的 `SPECULATIVE_CONFIG` 必須**單引號**包裹 JSON
+  （bash source 會剝雙引號）——已全面修正三個 vLLM 引擎的 config 與 example。
+
+### 📁 本輪原始數據
+
+| 檔案 | 情境 |
+| :--- | :--- |
+| `bench_ab_sglang_glm53_r1.json` / `bench_ab_vllm_glm53_r1.json` | R1 陽春版對決 |
+| `bench_ab_sglang_glm53_r2.json` / `bench_ab_vllm_glm53_r2.json` | R2 投機解碼對決（vLLM 85.6%） |

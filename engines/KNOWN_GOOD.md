@@ -20,7 +20,8 @@
 | `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_0.5.20.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中（**熱備援** `qwen3.8-flash-sglang`）；A/B 第二戰 3,925 tok/s（敗 vLLM 2.01×，2026-09-27） |
 | `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_0.29.1rc1.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
 | `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_0.29.1rc1.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中（**生產正名 `qwen3.8-flash`**，2026-09-27 切換）；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議） |
-| `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_0.5.20.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
+| `vllm-glm53-flash` | zai-org/GLM-5.3-Flash-vLLM | vLLM **0.28.1rc1.dev580**（專用 build） | `vllm_glm53-flash.sif`（官方認證 tag） | 328.3 GB（與 glm53 共享） | 8×H200 (TEP8) | ✅ 運行中（A/B 對照組 `glm5.3-flash-vllm`）；A/B 第三戰 2,857 tok/s（敗 SGLang 28%；MTP5 -28% 且成功率 85.6% 勿開；⚠️ Hopper 用 BF16 KV、關 autotune） |
+| `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_0.5.20.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中（**A/B 第三戰冠軍 3,669 tok/s**，MTP 關閉為最佳＝+18% vs 開啟，2026-09-27 定案；VLM 帶圖驗證通過） |
 
 ---
 

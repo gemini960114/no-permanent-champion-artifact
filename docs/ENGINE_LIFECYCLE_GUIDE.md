@@ -2,7 +2,7 @@
 
 > **目的**：地端推論引擎（SGLang / vLLM）的**啟動、驗證、停止、新模型上線**一套完整操作指引。
 > 對象：日常維運者與新成員。模型路由與 Gateway 的對外設定見
-> [README.zh-TW.md](../README.zh-TW.md)；已驗證的引擎配方（image 版本 × 參數）見
+> README.zh-TW.md（私有部署文件，未收錄於公開版）；已驗證的引擎配方（image 版本 × 參數）見
 > [engines/KNOWN_GOOD.md](../engines/KNOWN_GOOD.md)。
 
 ---
@@ -216,9 +216,9 @@ cd engines/<引擎> && ./submit_slurm.sh -a <計畫代號>
 
 | 文件 | 內容 |
 | :--- | :--- |
-| [README.zh-TW.md](../README.zh-TW.md) | 對外連線方式、安全設計、指令速查 |
-| [docs/DAILY_OPS_RUNBOOK.md](./DAILY_OPS_RUNBOOK.md) | 每日開關機與驗收 SOP（本手冊的快速操作版） |
+| README.zh-TW.md（私有部署文件，未收錄於公開版） | 對外連線方式、安全設計、指令速查 |
+| docs/DAILY_OPS_RUNBOOK.md（私有部署文件，未收錄於公開版） | 每日開關機與驗收 SOP（本手冊的快速操作版） |
 | [engines/KNOWN_GOOD.md](../engines/KNOWN_GOOD.md) | 已驗證配方登記表（image 版本 × 參數 × 實績） |
-| [docs/HPC_LITELLM_GATEWAY_ARCHITECTURE.md](./HPC_LITELLM_GATEWAY_ARCHITECTURE.md) | 整體架構設計 |
+| docs/HPC_LITELLM_GATEWAY_ARCHITECTURE.md（私有部署文件，未收錄於公開版） | 整體架構設計 |
 | [docs/PLAN_UPDATE_DAILY_MODEL_LIFECYCLE.md](./PLAN_UPDATE_DAILY_MODEL_LIFECYCLE.md) | 生命週期底層機制（兩階段發布、Port 原子鎖、三態對帳） |
-| [docs/EXTERNAL_VM_TUNNEL.md](./EXTERNAL_VM_TUNNEL.md) | 外部 VM 反向隧道 |
+| docs/EXTERNAL_VM_TUNNEL.md（私有部署文件，未收錄於公開版） | 外部 VM 反向隧道 |

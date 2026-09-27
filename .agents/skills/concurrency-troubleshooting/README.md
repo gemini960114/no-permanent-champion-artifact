@@ -53,6 +53,6 @@ Errno 24 Too many open files 是什麼？怎麼修？
 
 ## 相關文件
 
-- 隧道設定細節（含行內註解）：[`docs/EXTERNAL_VM_TUNNEL.md`](../../docs/EXTERNAL_VM_TUNNEL.md) 3.5 節
-- 壓測方法與歷史數據：[`benchmarks/README.md`](../../benchmarks/README.md)
-- 已驗證引擎配方：[`engines/KNOWN_GOOD.md`](../../engines/KNOWN_GOOD.md)
+- 隧道設定細節（含行內註解）：docs/EXTERNAL_VM_TUNNEL.md（私有部署文件，未收錄於公開版） 3.5 節
+- 壓測方法與歷史數據：[`benchmarks/README.md`](../../../benchmarks/README.md)
+- 已驗證引擎配方：[`engines/KNOWN_GOOD.md`](../../../engines/KNOWN_GOOD.md)

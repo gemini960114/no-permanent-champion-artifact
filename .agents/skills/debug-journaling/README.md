@@ -14,7 +14,7 @@
 | GLM cap 調優（64→128 一次到位） | flash 的 48→100 教訓（benchmarks/README） |
 | 抓 `stepfun` parser 是錯的 | skill 自己的「教訓實錄」制度（實測優先鐵律） |
 | 壓測失敗快速分層定位 | ulimit／隧道上限都寫在 benchmarks 教訓區 |
-| 避免 ps args 卡死、跨節點陷阱 | EXTERNAL_VM_TUNNEL §4.1 的實錄 |
+| 避免 ps args 卡死、跨節點陷阱 | EXTERNAL_VM_TUNNEL（私有部署文件，未收錄於公開版） §4.1 的實錄 |
 
 **沒有記錄的修復會被反覆重新發明**——對人類如此，對 AI 更是（每次對話都是失憶重來）。
 
@@ -33,11 +33,11 @@
 
 ```
 操作踩坑      → docs/ENGINE_LIFECYCLE_GUIDE.md §5
-基礎設施      → docs/EXTERNAL_VM_TUNNEL.md（教訓小節）
+基礎設施      → docs/EXTERNAL_VM_TUNNEL.md（私有部署文件，未收錄於公開版）（教訓小節）
 引擎配方/參數 → engines/KNOWN_GOOD.md
 壓測/容量     → benchmarks/README.md 工程解讀
 AI 流程方法論 → 對應 skill 的 README
-歷史軌跡      → CHANGELOG.md（條目寫「怎麼發現的」）
+歷史軌跡      → CHANGELOG.md（私有 repo 維護，未收錄於公開版）（條目寫「怎麼發現的」）
 ```
 
 ## 使用者端範例 prompt
@@ -52,6 +52,6 @@ AI 流程方法論 → 對應 skill 的 README
 
 ## 相關文件
 
-- 記錄格式實例：[`benchmarks/README.md`](../../benchmarks/README.md) 工程解讀區
-- 疑難排解實例：[`docs/ENGINE_LIFECYCLE_GUIDE.md`](../../docs/ENGINE_LIFECYCLE_GUIDE.md) §5
-- 教訓實錄實例：[`docs/EXTERNAL_VM_TUNNEL.md`](../../docs/EXTERNAL_VM_TUNNEL.md) §4.1
+- 記錄格式實例：[`benchmarks/README.md`](../../../benchmarks/README.md) 工程解讀區
+- 疑難排解實例：[`docs/ENGINE_LIFECYCLE_GUIDE.md`](../../../docs/ENGINE_LIFECYCLE_GUIDE.md) §5
+- 教訓實錄實例：docs/EXTERNAL_VM_TUNNEL.md（私有部署文件，未收錄於公開版） §4.1

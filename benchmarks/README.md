@@ -260,7 +260,7 @@ SGLang 開啟投機解碼（NEXTN）時會**自動把併發解碼上限降為 48
      連線的第一線瓶頸。**修法正解是 `/etc/security/limits.conf`**（PAM 機制；
      只改 systemd override 只影響主監聽器，per-connection sshd 不吃）——
      修復後重測 1500 人經隧道 **100%**。詳見
-     [`docs/EXTERNAL_VM_TUNNEL.md`](../docs/EXTERNAL_VM_TUNNEL.md) 3.5 節。
+     docs/EXTERNAL_VM_TUNNEL.md（私有部署文件，未收錄於公開版） 3.5 節。
    - **歸因修正實錄**：初判「8% ReadError 是隧道單流天花板」為**誤判**——真兇是
      sshd fd。教訓：旁路測試只能證明「問題在 VM↔Gateway 之間」，不能細分 sshd fd
      vs 隧道流控；**修一層驗一層**才是硬道理。單流天花板在 1500 內尚未摸到。

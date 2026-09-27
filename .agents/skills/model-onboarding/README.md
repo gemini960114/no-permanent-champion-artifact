@@ -30,7 +30,7 @@ cd ../.. && ./validate_engine.sh <新引擎>             # 兩階段驗證
 
 完整流程細節與鐵律（實測優先／同意才動工／三選一結論）見
 [SKILL.md](./SKILL.md)；操作全貌見
-[docs/ENGINE_LIFECYCLE_GUIDE.md](../../docs/ENGINE_LIFECYCLE_GUIDE.md)。
+[docs/ENGINE_LIFECYCLE_GUIDE.md](../../../docs/ENGINE_LIFECYCLE_GUIDE.md)。
 
 ## 使用者端：自然語言 Prompt 範例
 

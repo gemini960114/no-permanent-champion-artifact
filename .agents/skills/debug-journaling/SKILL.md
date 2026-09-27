@@ -24,18 +24,18 @@ description: >-
 | 教訓類型 | 落地文件 | 實例 |
 | :--- | :--- | :--- |
 | 操作踩坑（腳本競態、路徑解析、節點陷阱） | `docs/ENGINE_LIFECYCLE_GUIDE.md` §5 疑難排解 | sbatch 沒 cd 引擎目錄→迷路 runtime |
-| 基礎設施（VM／隧道／網路／fd 上限） | `docs/EXTERNAL_VM_TUNNEL.md`（教訓小節） | §3.5 fd 上限、§4.1 多節點陷阱 |
+| 基礎設施（VM／隧道／網路／fd 上限） | `docs/EXTERNAL_VM_TUNNEL.md`（私有部署文件，未收錄於公開版）（教訓小節） | §3.5 fd 上限、§4.1 多節點陷阱 |
 | 引擎配方／參數／版本陷阱 | `engines/KNOWN_GOOD.md` | `stepfun` parser 不存在→`step3p5` |
 | 壓測／容量／瓶頸定位 | `benchmarks/README.md` 工程解讀 | ulimit 1024、sshd fd 1024（含誤判修正實錄） |
 | AI 作業流程（評估、診斷方法論） | 對應 skill 的 README 記錄表／教訓區 | model-onboarding 評估記錄表 |
-| 所有變更的歷史軌跡 | `CHANGELOG.md`（修復條目寫「怎麼發現」） | 每次都有 |
+| 所有變更的歷史軌跡 | `CHANGELOG.md`（私有 repo 維護，未收錄於公開版）（修復條目寫「怎麼發現」） | 每次都有 |
 
 ## 記錄前自問
 
 - [ ] 下次遇到同樣症狀的人，**搜關鍵字**找得到這條嗎？（放對路由）
 - [ ] 有没有**可複製的驗證指令**？（不是「已修好」，是「跑這個會看到什麼」）
 - [ ] 設定位置有**行內註解**說明為什麼嗎？（未來看到程式碼的人不需要再考古）
-- [ ] CHANGELOG 有條目嗎？
+- [ ] CHANGELOG（私有 repo 維護，未收錄於公開版） 有條目嗎？
 
 ## 完成定義
 

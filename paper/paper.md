@@ -49,16 +49,18 @@ All experiments were run in September 2026 on the platform described in Section 
 All experiments ran on the serving platform we operate for internal users of an HPC cluster (NCHC). This section documents the platform both to establish experimental validity (Section 4) and because the platform design itself—engine lifecycle, traffic switching, and image governance—encodes operational lessons that we believe are reusable. Figure 1 outlines the request path; Table 1 summarizes the components.
 
 ```
-[external clients]
-      | HTTPS :443 (TLS terminates at Caddy on a fronting VM)
-      v
-[reverse SSH tunnel (autossh)]  -->  [LiteLLM gateway @ login node :54921]
-                                             |  dynamic routing, alias groups, key auth
-                                             v
-                        [engine Slurm jobs: SGLang / vLLM on H200 compute nodes]
-                        (engines/<name>/: config.env, port lock, endpoint file, logs)
+[external clients + load generator] --HTTPS--> [fronting VM: Caddy, TLS on :443]
+        --reverse SSH tunnel (autossh, loopback-only)--> [LiteLLM gateway @ login node :54921]
+                                                          routing, alias groups, key auth
+                                                                  | internal HTTP
+                                  +-------------------------------+---------------------------+
+                                  v                                                           v
+                   [candidate engine: Slurm job, H200]                  [production engine: Slurm job, H200]
+                    suffixed aliases, isolated                            holds the production aliases
+
+each engine = engines/<name>/: config.env (image, GPUs, cap, ALIAS_CLAIM), port lock, endpoint file, logs
 ```
-**Figure 1.** Request path from external clients through the gateway to engine jobs.
+**Figure 1.** Request path from external clients through the gateway to engine jobs. A candidate engine registers only suffixed aliases, so it receives benchmark traffic without claiming production names; switching which engine holds the production aliases is a two-line `ALIAS_CLAIM` edit plus a gateway restart (Section 3).
 
 | Component | Implementation | Notes |
 | :--- | :--- | :--- |
@@ -157,27 +159,31 @@ On the KDA model, SGLang again led (Table 7). The vLLM side required a *dedicate
 
 | Configuration | SGLang 0.5.20 | vLLM 0.28.1rc1 (dedicated) |
 | :--- | :---: | :---: |
-| R1 throughput / P95 / success | **3,669 tok/s** / **192.5 s** / 100% | 2,857 tok/s / 251.0 s / 100% |
-| R2 throughput (MTP) | 3,135 (**−15%**) | 2,066 (**−28%**, censored) |
-| R2 success | 100% | **85.6%** (ReadTimeouts) |
+| R1 aggregate throughput | **3,669 tok/s** | 2,857 tok/s |
+| R1 P95 latency | **192.5 s** | 251.0 s |
+| R2 (speculative, MTP) | 3,135 tok/s (**−15%**) | 2,066 tok/s (**−28%**, censored) |
+| R2 success rate | 100% | **85.6%** (ReadTimeouts) |
+| Best per framework | **3,669 (plain)** | 2,857 (plain) |
 
-**Table 7.** KDA battle. R1 work pair 732k–734k tokens; vLLM R2 censored at 623k (Section 4).
+**Table 7.** KDA battle. Both R1 runs 100% success; R1 work pair 732k–734k tokens; vLLM R2 censored at 623k (Section 4).
 
 Speculative decoding was a net loss on both frameworks, and on vLLM it was also a *reliability* loss: 14.4% of requests exceeded the client timeout of 300 s. The −28% figure is computed over successful requests with wall time truncated at the timeout, and the run generated 15% less work than its pair (623k vs 733k tokens), so it is a censored lower bound on the damage. The production consequence was immediate—our SGLang deployment had been running with MTP enabled since an earlier tuning round (3,057–3,135 tok/s in that configuration); disabling it raised production throughput to 3,669 tok/s (+17–20% against the 3,057–3,135 tok/s range of the MTP-on configuration), a change we shipped the same day by editing the engine's `config.env` and restarting the engine.
 
 ### 5.4 Cross-architecture synthesis
 
-Table 8 collects the headline result: the winning framework changed with each model, and the margin ranged from 6% (near parity) to 2.33×.
+Table 8 and Figure 2 collect the headline results: the winning framework changed with each model, and the margin ranged from 6% (near parity) to 2.33×.
 
-| Architecture (model) | Frameworks | Winner | Margin (R1) | Speculative decoding at high concurrency |
-| :--- | :--- | :--- | :---: | :--- |
-| Dense hybrid, 27B (Qwen3.8-27B) | SGLang vs vLLM | SGLang | +6.3% | Both negative (−40% / −16%); SGLang also cap 128→48 |
-| Ultra-sparse MoE (Qwen3.8-Flash-Next) | idem | vLLM | 2.33× | SGLang +16%; vLLM −46% |
-| KDA-hybrid MoE (GLM-5.3-Flash) | SGLang vs vLLM (dedicated) | SGLang | +28% | Both negative (−15% / −28%, success 85.6%) |
+*Figure 2 (PDF only): (a) plain-serving (R1) throughput per model, SGLang in blue and vLLM in orange, each pair labelled with its winner and margin; (b) throughput change when speculative decoding is enabled, relative to the same framework's R1, with the censored KDA vLLM R2 bar hatched. Values as in Tables 4–7.*
 
-**Table 8.** Synthesis across the three battles. Framework versions as in Table 3: SGLang 0.5.20 throughout; vLLM 0.29.1rc1 on the dense and ultra-sparse MoE models; dedicated vLLM 0.28.1rc1 build on the KDA model.
+| Architecture (model) | R1 winner | Margin | SGLang R2 vs. R1 | vLLM R2 vs. R1 |
+| :--- | :--- | ---: | ---: | ---: |
+| Dense hybrid (Qwen3.8-27B) | SGLang | +6.3% | −40%ᵃ | −16% |
+| Ultra-sparse MoE (Qwen3.8-Flash-Next) | vLLM | 2.33× | +16% | −46% |
+| KDA-hybrid MoE (GLM-5.3-Flash) | SGLang | +28% | −15% | −28%ᵇ |
 
-Two regularities stand out. First, the framework gap was smallest on the well-trodden dense hybrid (6%) and largest on the newer ultra-sparse MoE (2.3×), which may reflect how recently each framework acquired mature kernels for a given architecture—though with one model per architecture we cannot separate this from framework-version and workload differences. Second, in these runs *speculative decoding behaved as a latency tool turned throughput cost under saturation*: in five of the six framework–model pairs, draft-and-verify FLOPs appear not to have been recovered by acceptance gains, consistent with decode batches already binding GPU capacity (we did not measure acceptance lengths or utilization). The single positive case (SGLang NEXTN on the 6B-active MoE) is consistent with this explanation—cheap decodes leave headroom for drafting—rather than contradicting it.
+**Table 8.** Synthesis across the three battles. The last two columns give each framework's throughput change when speculative decoding is enabled. ᵃIncludes SGLang's automatic cap reduction from 128 to 48 (Section 5.1). ᵇCensored: 85.6% success (Section 4). Framework versions as in Table 3: SGLang 0.5.20 throughout; vLLM 0.29.1rc1 on the dense and ultra-sparse MoE models; dedicated vLLM 0.28.1rc1 build on the KDA model.
+
+Two regularities stand out. First (Figure 2a), the framework gap was smallest on the well-trodden dense hybrid (6%) and largest on the newer ultra-sparse MoE (2.3×), which may reflect how recently each framework acquired mature kernels for a given architecture—though with one model per architecture we cannot separate this from framework-version and workload differences. Second (Figure 2b), in these runs *speculative decoding behaved as a latency tool turned throughput cost under saturation*: in five of the six framework–model pairs, draft-and-verify FLOPs appear not to have been recovered by acceptance gains, consistent with decode batches already binding GPU capacity (we did not measure acceptance lengths or utilization). The single positive case (SGLang NEXTN on the 6B-active MoE) is consistent with this explanation—cheap decodes leave headroom for drafting—rather than contradicting it.
 
 ### 5.5 Platform-level capacity and reliability
 
@@ -226,7 +232,7 @@ We built a multi-model API service on an HPC cluster—a LiteLLM gateway over Sl
 
 **Literature search and verification.** The literature search, and the verification of every arXiv identifier and author list, were performed by an agent against the arXiv API. This process had a disclosed failure mode: an intermediate reference-conversion pass introduced incorrect author lists in five entries, which were caught and corrected during independent external review—a known transcription-error class for AI-assisted literature verification. Responsibility for reference accuracy rests with the authors.
 
-**Manuscript drafting.** The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; the agent used for the final revision was opencode, powered by GLM-5.3. An independent LLM agent performed seven rounds of external review (three adversarial content reviews, two pre-submission checks, and two regression checks) whose findings are incorporated above.
+**Manuscript drafting.** The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; the agent used for the text revisions was opencode, powered by GLM-5.3. A second LLM agent, Claude Code (Anthropic Claude Opus 5.5), performed eight rounds of external review (three adversarial content reviews, three pre-submission checks, and two regression checks) whose findings are incorporated above; after the reviews, the same agent redrew Figures 1 and 2 and restructured Tables 7–9, without changing any reported value.
 
 **Human role.** Problem framing, platform and release decisions, and verdict approval were made by the human authors, who also secured the funding. The corresponding author is responsible for final verification of the principal numerical results, calculations, and claim–citation links.
 

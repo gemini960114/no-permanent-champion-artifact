@@ -6,16 +6,27 @@
 \usepackage{microtype}
 \usepackage{xspace}
 \usepackage{tikz}
-\usetikzlibrary{positioning,arrows.meta}
+\usetikzlibrary{positioning,arrows.meta,calc}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
 \usetikzlibrary{patterns}
+% Figure palette: one hue per framework (validated categorical pair; CVD dE 24.7,
+% normal-vision dE 33.6, >=3:1 on white), neutral inks for all text and chrome.
+\definecolor{sglang}{HTML}{2A78D6}
+\definecolor{vllm}{HTML}{EB6834}
+\definecolor{inksec}{HTML}{52514E}
+\definecolor{inkmuted}{HTML}{898781}
+\definecolor{gridc}{HTML}{E1E0D9}
+\definecolor{axisc}{HTML}{C3C2B7}
+\definecolor{panel}{HTML}{F5F4F0}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
 \hypersetup{pdftitle={No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA-Hybrid Architectures on H200 GPUs}, pdfauthor={Chao-Chun Chuang, Po-Hsiang Lin}}
 \usepackage{url}
 
 \newcommand{\tps}{tok/s\xspace}
+\newcommand{\figsub}[1]{{\footnotesize\color{inksec}#1}}
 
 \title{\textbf{No Permanent Champion: An Agent-Automated, Controlled A/B Evaluation of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA-Hybrid Architectures on H200 GPUs}}
 
@@ -71,18 +82,31 @@ All experiments ran on the serving platform we operate for internal users of an 
 
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}[node distance=1.05cm,
-  box/.style={draw, rounded corners, align=center, minimum width=5.6cm, minimum height=0.85cm, font=\small},
-  arrow/.style={-{Stealth}, thick}]
-\node[box] (cli) {External clients};
-\node[box, below=of cli] (vm) {Fronting VM: Caddy TLS terminates at :443};
-\node[box, below=of vm] (gw) {LiteLLM gateway @ login node :54921\\ \footnotesize dynamic routing, alias groups, key auth};
-\node[box, below=of gw] (eng) {Engine Slurm jobs: SGLang / vLLM on H200 compute nodes\\ \footnotesize \texttt{engines/<name>/: config.env, port lock, endpoint file, logs}};
-\draw[arrow] (cli) -- (vm) node[midway, right, font=\scriptsize] {HTTPS};
-\draw[arrow] (vm) -- (gw) node[midway, right, font=\scriptsize] {reverse SSH tunnel (autossh), loopback-only};
-\draw[arrow] (gw) -- (eng) node[midway, right, font=\scriptsize] {internal HTTP};
+\begin{tikzpicture}[
+  font=\small,
+  box/.style={draw=axisc, fill=panel, rounded corners=2pt, align=center, inner sep=4pt,
+              text width=3.2cm, minimum height=1.55cm,
+              execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}},
+  gw/.style={box, draw=inksec, line width=0.8pt, text width=4.4cm},
+  flow/.style={-{Stealth[length=2mm]}, line width=0.7pt, draw=inksec},
+  lab/.style={font=\scriptsize, text=inksec, align=center}]
+\node[box] (cli) {External clients\\[-1pt]\figsub{and load generator}};
+\node[box, right=2.1cm of cli] (vm) {Fronting VM\\[-1pt]\figsub{Caddy, TLS on :443}};
+\node[gw, right=2.1cm of vm] (gw) {LiteLLM gateway\\[-1pt]\figsub{login node :54921}\\[-1pt]\figsub{routing, alias groups, key auth}};
+\node[box, text width=4.4cm, below=1.2cm of gw] (prod) {Production engine\\[-1pt]\figsub{Slurm job on H200 nodes}\\[-1pt]\figsub{holds the production aliases}};
+\node[box, text width=4.4cm] (cand) at (vm |- prod) {Candidate engine\\[-1pt]\figsub{Slurm job on H200 nodes}\\[-1pt]\figsub{suffixed aliases, isolated}};
+\node[align=flush left, font=\scriptsize, text=inksec, text width=3.4cm, anchor=west,
+      execute at begin node={\hyphenpenalty=10000\exhyphenpenalty=10000}] (note) at ([xshift=-2pt]cli.west |- prod)
+  {Each engine is a directory \texttt{engines/<name>/}: \texttt{config.env} (image, GPUs, cap, \texttt{ALIAS\_CLAIM}), port lock, endpoint file, logs.};
+\draw[flow] (cli) -- node[lab, above] {HTTPS} (vm);
+\draw[flow] (vm) -- node[lab, above] {reverse SSH\\[-2pt]tunnel} node[lab, below] {autossh,\\[-2pt]loopback-only} (gw);
+\coordinate (bus) at ($(gw.south)!0.5!(prod.north)$);
+\draw[line width=0.7pt, draw=inksec] (gw.south) -- (bus);
+\draw[flow] (bus) -- (prod.north);
+\draw[flow] (bus) -| (cand.north);
+\node[lab, anchor=south west] at ([xshift=3pt]bus) {internal HTTP};
 \end{tikzpicture}
-\caption{Request path from external clients through the gateway to engine jobs.}
+\caption{Request path from external clients through the gateway to engine jobs. A candidate engine registers only suffixed aliases, so it receives benchmark traffic without claiming production names; switching which engine holds the production aliases is a two-line \texttt{ALIAS\_CLAIM} edit plus a gateway restart (Section~\ref{sec:platform}).}
 \label{fig:arch}
 \end{figure}
 
@@ -213,7 +237,7 @@ On the ultra-sparse MoE, the ranking reversed (Table~\ref{tab:moe}).
 \toprule
 \textbf{Configuration} & \textbf{SGLang 0.5.20} & \textbf{vLLM 0.29.1rc1} \\
 \midrule
-R1 aggregate throughput & 3,383 \tps$^{1}$ & \textbf{7,886 \tps} \\
+R1 aggregate throughput & 3,383 \tps{}$^{1}$ & \textbf{7,886 \tps} \\
 R1 P95 latency & 150.6 s & \textbf{63.2 s} \\
 R2 (speculative) & 3,925 \tps (NEXTN, \textbf{+16\%}) & 4,282 \tps (MTP$\times$3, \textbf{$-$46\%}) \\
 Best per framework & 3,925 (NEXTN on) & \textbf{7,886 (plain)} \\
@@ -232,17 +256,18 @@ On the KDA model, SGLang again led (Table~\ref{tab:kda}). The vLLM side required
 
 \begin{table}[t]
 \centering
-\small
 \begin{tabular}{lcc}
 \toprule
 \textbf{Configuration} & \textbf{SGLang 0.5.20} & \textbf{vLLM 0.28.1rc1 (dedicated)} \\
 \midrule
-R1 throughput / P95 / success & \textbf{3,669 \tps} / \textbf{192.5 s} / 100\% & 2,857 \tps{} / 251.0 s / 100\% \\
-R2 throughput (MTP) & 3,135 (\textbf{$-$15\%}) & 2,066 (\textbf{$-$28\%}, censored) \\
-R2 success & 100\% & \textbf{85.6\%} (ReadTimeouts) \\
+R1 aggregate throughput & \textbf{3,669 \tps} & 2,857 \tps \\
+R1 P95 latency & \textbf{192.5 s} & 251.0 s \\
+R2 (speculative, MTP) & 3,135 \tps (\textbf{$-$15\%}) & 2,066 \tps (\textbf{$-$28\%}, censored) \\
+R2 success rate & 100\% & \textbf{85.6\%} (ReadTimeouts) \\
+Best per framework & \textbf{3,669 (plain)} & 2,857 (plain) \\
 \bottomrule
 \end{tabular}
-\caption{KDA battle. R1 work pair 732k--734k tokens; vLLM R2 censored at 623k (Section~\ref{sec:method}).}
+\caption{KDA battle. Both R1 runs 100\% success; R1 work pair 732k--734k tokens; vLLM R2 censored at 623k (Section~\ref{sec:method}).}
 \label{tab:kda}
 \end{table}
 
@@ -251,55 +276,83 @@ Speculative decoding was a net loss on both frameworks, and on vLLM it was also 
 \subsection{Cross-architecture synthesis}
 \label{sec:synthesis}
 
-Table~\ref{tab:synthesis} and Figure~\ref{fig:throughput} collect the headline result: the winning framework changed with each model, and the margin ranged from 6\% (near parity) to 2.33$\times$.
+Table~\ref{tab:synthesis} and Figure~\ref{fig:throughput} collect the headline results: the winning framework changed with each model, and the margin ranged from 6\% (near parity) to 2.33$\times$.
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
-\begin{axis}[
-  width=0.92\textwidth, height=7.5cm,
-  ybar, bar width=10pt,
-  symbolic x coords={Dense 27B, Ultra-sparse MoE, KDA MoE},
+\begin{groupplot}[
+  group style={group size=2 by 1, horizontal sep=1.7cm},
+  width=0.49\textwidth, height=6.4cm,
+  ybar, /pgf/bar width=11pt,
+  symbolic x coords={Dense,MoE,KDA},
   xtick=data,
-  ymin=0, ymax=9600,
-  ylabel={Aggregate throughput (\tps)},
-  ymajorgrids=true, grid style={black!12},
-  legend style={at={(0.02,0.98)}, anchor=north west, legend columns=2, font=\scriptsize, draw=black!30, fill=white, fill opacity=0.85},
-  nodes near coords={\pgfmathprintnumber\pgfplotspointmeta},
-  every node near coord/.append style={font=\tiny, rotate=90, anchor=west},
-  enlarge x limits=0.15,
+  xticklabels={{Dense\\27B},{Ultra-sparse\\MoE},{KDA-hybrid\\MoE}},
+  xticklabel style={align=center, font=\footnotesize, text=black},
+  enlarge x limits=0.22,
+  axis lines*=left, axis line style={draw=axisc}, tick style={draw=none},
+  ymajorgrids=true, grid style={draw=gridc, line width=0.3pt},
+  yticklabel style={font=\footnotesize, text=inksec},
+  ylabel style={font=\footnotesize},
+  title style={font=\small, yshift=-2pt},
+  legend style={draw=none, font=\footnotesize, legend columns=3,
+                /tikz/every even column/.append style={column sep=0.45cm}},
+  legend image code/.code={\draw[#1, draw=none] (0cm,-0.1cm) rectangle (0.32cm,0.14cm);},
 ]
-\addplot[bar shift=-15pt, draw=blue!40!black, fill=blue!65] coordinates {(Dense 27B,3823) (Ultra-sparse MoE,3383) (KDA MoE,3669)};
-\addplot[bar shift=-5pt, draw=blue!40!black, fill=blue!30] coordinates {(Dense 27B,2306) (Ultra-sparse MoE,3925) (KDA MoE,3135)};
-\addplot[bar shift=5pt, draw=orange!50!black, fill=orange!75] coordinates {(Dense 27B,3597) (Ultra-sparse MoE,7886) (KDA MoE,2857)};
-\addplot[bar shift=15pt, draw=orange!50!black, fill=orange!35] coordinates {(Dense 27B,3034) (Ultra-sparse MoE,4282)};
-\addplot[forget plot, bar shift=15pt, draw=orange!50!black, pattern=north east lines, pattern color=orange!55!black] coordinates {(KDA MoE,2066)};
-\legend{SGLang R1, SGLang R2 (spec.), vLLM R1, vLLM R2 (spec.)}
-\addlegendimage{area legend, draw=orange!50!black, pattern=north east lines, pattern color=orange!55!black}
-\addlegendentry{censored}
-\end{axis}
+% (a) R1 throughput: who wins
+\nextgroupplot[title={(a) Plain serving (R1)},
+  ymin=0, ymax=9400, ytick={0,2000,4000,6000,8000}, yticklabels={0,2{,}000,4{,}000,6{,}000,8{,}000},
+  clip=false,
+  ylabel={Aggregate throughput (\tps)},
+  legend to name=fwlegend]
+\addplot[fill=sglang, draw=none, bar shift=-6.5pt] coordinates {(Dense,3823) (MoE,3383) (KDA,3669)};
+\addlegendentry{SGLang}
+\addplot[fill=vllm, draw=none, bar shift=6.5pt] coordinates {(Dense,3597) (MoE,7886) (KDA,2857)};
+\addlegendentry{vLLM}
+\addlegendimage{area legend, draw=vllm, pattern=north east lines, pattern color=vllm}
+\addlegendentry{censored run}
+\node[font=\footnotesize\bfseries, anchor=south] at (axis cs:Dense,3823) [yshift=3pt] {\shortstack{SGLang\\+6.3\%}};
+\node[font=\footnotesize\bfseries, anchor=south] at (axis cs:MoE,7886) [yshift=3pt] {\shortstack{vLLM\\2.33$\times$}};
+\node[font=\footnotesize\bfseries, anchor=south] at (axis cs:KDA,3669) [yshift=3pt] {\shortstack{SGLang\\+28\%}};
+% (b) effect of speculative decoding, relative to the same framework's R1
+\nextgroupplot[title={(b) Speculative decoding (R2 vs.\ own R1)},
+  ymin=-58, ymax=24, ytick={-50,-40,-30,-20,-10,0,10,20},
+  yticklabels={$-50\%$,$-40\%$,$-30\%$,$-20\%$,$-10\%$,0\%,$+10\%$,$+20\%$},
+  ylabel={Throughput change}, ylabel shift=-3pt,
+  nodes near coords={\pgfmathprintnumber[fixed,precision=0,showpos]{\pgfplotspointmeta}},
+  nodes near coords align={vertical},
+  every node near coord/.append style={font=\scriptsize, text=black},
+  extra y ticks={0}, extra y tick labels={},
+  extra y tick style={grid style={draw=inksec, line width=0.6pt}}]
+\addplot[fill=sglang, draw=none, bar shift=-6.5pt] coordinates {(Dense,-39.68) (MoE,16.03) (KDA,-14.54)};
+\addplot[fill=vllm, draw=none, bar shift=6.5pt] coordinates {(Dense,-15.67) (MoE,-45.71)};
+\addplot[draw=vllm, line width=0.5pt, pattern=north east lines, pattern color=vllm, bar shift=6.5pt] coordinates {(KDA,-27.69)};
+\end{groupplot}
+\node[anchor=north] at ($(group c1r1.south)!0.5!(group c2r1.south)+(0,-1.05cm)$) {\pgfplotslegendfromname{fwlegend}};
 \end{tikzpicture}
-\caption{Aggregate throughput of the three battles (values from Tables~\ref{tab:dense-r1}--\ref{tab:kda}). R2 denotes speculative decoding enabled. The \emph{hatched} bar (vLLM R2 on the KDA model) is a censored measurement: 85.6\% success, work truncated at 623k tokens (Section~\ref{sec:method}).}
+\caption{The three battles at a glance (values from Tables~\ref{tab:dense-r1}--\ref{tab:kda}). (a)~Plain-serving throughput; the label above each pair names the winner and its margin. (b)~Change in aggregate throughput when the checkpoint's speculative-decoding head is enabled, relative to the same framework's R1; five of six bars are below zero. SGLang's dense R2 also includes its automatic cap reduction from 128 to 48 (Section~\ref{sec:dense}). The hatched bar is a censored measurement: 85.6\% success, work truncated at 623k tokens (Section~\ref{sec:method}).}
 \label{fig:throughput}
 \end{figure}
 
 \begin{table}[t]
 \centering
 \small
-\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xllc>{\raggedright\arraybackslash}X}
+\begin{tabular}{llr@{\hspace{1.4em}}cc}
 \toprule
-\textbf{Architecture (model)} & \textbf{Frameworks} & \textbf{Winner} & \textbf{Margin (R1)} & \textbf{Spec.\ decoding at high concurrency} \\
+ & & & \multicolumn{2}{c}{\textbf{R2 vs.\ own R1}} \\
+\cmidrule(l){4-5}
+\textbf{Architecture (model)} & \textbf{R1 winner} & \textbf{Margin} & \textbf{SGLang} & \textbf{vLLM} \\
 \midrule
-Dense hybrid, 27B (Qwen3.8-27B) & SGLang vs vLLM & SGLang & +6.3\% & Both negative ($-$40\% / $-$16\%); SGLang also cap 128$\rightarrow$48 \\
-Ultra-sparse MoE (Qwen3.8-Flash-Next) & idem & vLLM & 2.33$\times$ & SGLang +16\%; vLLM $-$46\% \\
-KDA-hybrid MoE (GLM-5.3-Flash) & SGLang vs vLLM (dedicated) & SGLang & +28\% & Both negative ($-$15\% / $-$28\%, success 85.6\%) \\
+Dense hybrid (Qwen3.8-27B) & SGLang & +6.3\% & $-$40\%$^{a}$ & $-$16\% \\
+Ultra-sparse MoE (Qwen3.8-Flash-Next) & vLLM & 2.33$\times$ & +16\% & $-$46\% \\
+KDA-hybrid MoE (GLM-5.3-Flash) & SGLang & +28\% & $-$15\% & $-$28\%$^{b}$ \\
 \bottomrule
-\end{tabularx}
-\caption{Synthesis across the three battles. Framework versions as in Table~\ref{tab:conditions}: SGLang 0.5.20 throughout; vLLM 0.29.1rc1 on the dense and ultra-sparse MoE models; dedicated vLLM 0.28.1rc1 build on the KDA model.}
+\end{tabular}
+\caption{Synthesis across the three battles. The last two columns give each framework's throughput change when speculative decoding is enabled. $^{a}$Includes SGLang's automatic cap reduction from 128 to 48 (Section~\ref{sec:dense}). $^{b}$Censored: 85.6\% success (Section~\ref{sec:method}). Framework versions as in Table~\ref{tab:conditions}: SGLang 0.5.20 throughout; vLLM 0.29.1rc1 on the dense and ultra-sparse MoE models; dedicated vLLM 0.28.1rc1 build on the KDA model.}
 \label{tab:synthesis}
 \end{table}
 
-Two regularities stand out. First, the framework gap was smallest on the well-trodden dense hybrid (6\%) and largest on the newer ultra-sparse MoE (2.3$\times$), which may reflect how recently each framework acquired mature kernels for a given architecture---though with one model per architecture we cannot separate this from framework-version and workload differences. Second, in these runs \emph{speculative decoding behaved as a latency tool turned throughput cost under saturation}: in five of the six framework--model pairs, draft-and-verify FLOPs appear not to have been recovered by acceptance gains, consistent with decode batches already binding GPU capacity (we did not measure acceptance lengths or utilization). The single positive case (SGLang NEXTN on the 6B-active MoE) is consistent with this explanation---cheap decodes leave headroom for drafting---rather than contradicting it.
+Two regularities stand out. First (Figure~\ref{fig:throughput}a), the framework gap was smallest on the well-trodden dense hybrid (6\%) and largest on the newer ultra-sparse MoE (2.3$\times$), which may reflect how recently each framework acquired mature kernels for a given architecture---though with one model per architecture we cannot separate this from framework-version and workload differences. Second (Figure~\ref{fig:throughput}b), in these runs \emph{speculative decoding behaved as a latency tool turned throughput cost under saturation}: in five of the six framework--model pairs, draft-and-verify FLOPs appear not to have been recovered by acceptance gains, consistent with decode batches already binding GPU capacity (we did not measure acceptance lengths or utilization). The single positive case (SGLang NEXTN on the 6B-active MoE) is consistent with this explanation---cheap decodes leave headroom for drafting---rather than contradicting it.
 
 \subsection{Platform-level capacity and reliability}
 \label{sec:reliability}
@@ -309,7 +362,7 @@ Beyond per-engine comparisons, the platform sustained a mixed workload of 1,500 
 \begin{table}[t]
 \centering
 \footnotesize
-\begin{tabularx}{\textwidth}{Xcccp{4.6cm}}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xccc>{\raggedright\arraybackslash}p{4.9cm}}
 \toprule
 \textbf{Stage of the reliability investigation} & \textbf{Success} & \textbf{Aggregate} & \textbf{P95} & \textbf{Root cause identified} \\
 \midrule
@@ -357,7 +410,7 @@ We built a multi-model API service on an HPC cluster---a LiteLLM gateway over Sl
 
 \textbf{Literature search and verification.} The literature search, and the verification of every arXiv identifier and author list, were performed by an agent against the arXiv API. This process had a disclosed failure mode: an intermediate reference-conversion pass introduced incorrect author lists in five entries, which were caught and corrected during independent external review---a known transcription-error class for AI-assisted literature verification. Responsibility for reference accuracy rests with the authors.
 
-\textbf{Manuscript drafting.} The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; the agent used for the final revision was opencode, powered by GLM-5.3. An independent LLM agent performed seven rounds of external review (three adversarial content reviews, two pre-submission checks, and two regression checks) whose findings are incorporated above.
+\textbf{Manuscript drafting.} The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; the agent used for the text revisions was opencode, powered by GLM-5.3. A second LLM agent, Claude Code (Anthropic Claude Opus 5.5), performed eight rounds of external review (three adversarial content reviews, three pre-submission checks, and two regression checks) whose findings are incorporated above; after the reviews, the same agent redrew Figures~\ref{fig:arch} and~\ref{fig:throughput} and restructured Tables~\ref{tab:kda}--\ref{tab:reliability}, without changing any reported value.
 
 \textbf{Human role.} Problem framing, platform and release decisions, and verdict approval were made by the human authors, who also secured the funding. The corresponding author is responsible for final verification of the principal numerical results, calculations, and claim--citation links.
 

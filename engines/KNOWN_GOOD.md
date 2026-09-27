@@ -17,10 +17,7 @@
 | `sglang-qwen-flash` | Qwen/Qwen3.8-Flash-Next-FP8 | SGLang **0.5.20** | `sglang_flash_latest.sif` | 173 GB | 4×H200 (TP4+EP4) | ✅ 運行中（**熱備援** `qwen3.8-flash-sglang`）；A/B 第二戰 3,925 tok/s（敗 vLLM 2.01×，2026-09-27） |
 | `vllm-qwen27b` | Qwen/Qwen3.8-27B-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 52 GB（與 27b 共享） | 1×H200 (TP1) | ✅ 運行中；A/B 對決 3,597 tok/s（2026-09-27，官方 Recipe 驗證 9/9 通過） |
 | `vllm-flash-next` | Qwen/Qwen3.8-Flash-Next-vLLM | vLLM **0.29.1rc1.dev452** | `vllm_latest.sif` | 173 GB（與 flash 共享） | 4×H200 (TEP4) | ✅ 運行中（**生產正名 `qwen3.8-flash`**，2026-09-27 切換）；A/B 第二戰冠軍 **7,886 tok/s**（R1 陽春即最佳，MTP -46% 不建議） |
-| `sglang-step5-fp8` | TypeSafeAI/Step-5-Preview-FP8 | SGLang **0.5.20**（原生 step3p5 支援） | `sglang_flash_latest.sif`（共用） | ~604 GB (**FP8 未釋出**) | 8×H200 (TP8+EP8) | 🟡 準備中（BF16 1.21TB 超出硬體已排除；FP8 釋出後即可上線） |
 | `sglang-glm53-flash` | zai-org/GLM-5.3-Flash | SGLang **0.5.20**（原生 glm5_next 支援） | `sglang_flash_latest.sif`（共用） | 328.3 GB（原生 FP8） | 8×H200 (TP8+EP8) | ✅ 運行中；1000 人壓測 100%（峰值 6,980 tok/s，`MAX_RUNNING_REQUESTS=128`，2026-09-26，VLM 帶圖驗證通過） |
-
-> `engines/sglang-qwen` → `sglang-qwen-27b` 的相容 symlink，非獨立引擎。
 
 ---
 
@@ -75,17 +72,20 @@
 | `HEALTH_TIMEOUT` | 2400 秒（173GB 載入＋編譯） |
 | 狀態 | ✅ 2026-09-27 A/B 第二戰冠軍：1000 人×800 tok **100%／7,886 tok/s／P95 63.2s**（R1 陽春即各自最佳，勝 SGLang 最佳配置 2.01×） |
 
-### 5. engines/sglang-step5-fp8（原型：大模型 TP8+EP8 MoE）🟡 準備中
+### 5. engines/sglang-step5-fp8（已移除，配方存檔）
+
+> **模組已刪除（2026-09-27）**：等待官方 FP8 釋出期間為避免誤啟動（權重未下載，
+> 誤啟會嘗試拉 604GB）。**完整配方存檔如下**，FP8 釋出時以
+> `./new_engine.sh sglang-step5-fp8 --from sglang-glm53-flash` 十分鐘重建：
 
 | 項目 | 值 |
 | :--- | :--- |
-| image | `sglang_flash_latest.sif`（與 flash **共用**，SGLang 0.5.20，2026-09-26 實測已內建 `step3p5.py`／`step3p5_mtp.py` 原生支援） |
-| 權重 | `Step-5-Preview-FP8`（~604 GB，**官方 FP8 尚未釋出**；BF16 版 1.21TB 超出 8×H200 與磁碟容量已排除） |
+| image | `sglang_flash_latest.sif`（SGLang 0.5.20，實測已內建 `step3p5.py`／`step3p5_mtp.py` 原生支援） |
+| 權重 | `Step-5-Preview-FP8`（~604 GB，官方 FP8 尚未釋出；BF16 版 1.21TB 超出 8×H200 與磁碟已排除） |
 | 平行 | TP=8 + EP=8（單節點 8×H200 = 1,128GB，KV 餘 ~520GB） |
-| 關鍵參數 | `--context-length 262144`（官方 1M 為理想值）、`--reasoning-parser step3p5`（⚠️ model card 寫 `stepfun`，實測 0.5.20 DetectorMap 無此選項）、`--trust-remote-code`、`--mem-fraction-static 0.90`、`MAX_RUNNING_REQUESTS=64`（初始，上線後調優） |
+| 關鍵參數 | `--context-length 262144`（官方 1M 為理想值）、`--reasoning-parser step3p5`（⚠️ model card 寫 `stepfun`，實測 0.5.20 DetectorMap 無此選項）、`--trust-remote-code`、`--mem-fraction-static 0.90`、`MAX_RUNNING_REQUESTS=64`（初始） |
 | 未實驗項 | MTP 投機解碼（image 已含 `step3p5_mtp.py`，俟官方參數確認） |
 | `HEALTH_TIMEOUT` | 2400 秒（604GB 載入＋暖機） |
-| 評估記錄 | 2026-09-26，流程見 [`.agents/skills/model-onboarding/README.md`](../.agents/skills/model-onboarding/README.md) |
 
 ---
 

@@ -179,3 +179,10 @@ paper/*.out
 .agents/skills/arxiv/
 .agents/skills/science-research-writing/
 .agents/skills/scientific-writing/
+
+# paper-pipeline 評測工作區（不 入庫）
+.agents/skills/paper-pipeline-workspace/
+
+# paper-pipeline skill 未完成評測，暫不入庫（與寫作 skills 同政策）
+.agents/skills/paper-pipeline/
+__pycache__/

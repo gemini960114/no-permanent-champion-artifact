@@ -19,7 +19,7 @@ We operate a multi-model API service on an HPC cluster—a LiteLLM gateway front
 
 ## 1 Introduction
 
-The throughput and latency of a deployed large language model (LLM) depend not only on the model and the accelerator, but on the serving framework that schedules batches, manages KV-cache memory, and executes attention and mixture-of-experts (MoE) kernels. Among the open-source frameworks used for self-hosted deployment, vLLM is the most widely adopted in practice and SGLang is among its principal alternatives [17]: vLLM, introduced with PagedAttention for efficient KV-cache memory management [1], and SGLang, introduced with a RadixAttention prefix cache and a structured-generation runtime [2]. Both systems evolve quickly, add support for new model architectures as they appear, and make different implementation trade-offs for the same architecture. Practitioners therefore face a recurring question that vendor documentation does not answer: *for this specific model, on this hardware, which framework will serve it faster?*
+The throughput and latency of a deployed large language model (LLM) depend not only on the model and the accelerator, but on the serving framework that schedules batches, manages KV-cache memory, and executes attention and mixture-of-experts (MoE) kernels. Among the open-source frameworks used for self-hosted deployment, vLLM is the most widely adopted in practice and SGLang is among its principal alternatives [17]. vLLM was introduced with PagedAttention for efficient KV-cache memory management [1], and SGLang with a RadixAttention prefix cache and a structured-generation runtime [2]. Both systems evolve quickly, add support for new model architectures as they appear, and make different implementation trade-offs for the same architecture. Practitioners therefore face a recurring question that vendor documentation does not answer: *for this specific model, on this hardware, which framework will serve it faster?*
 
 This question is not academic for us. We operate a multi-model API service for the users of an HPC cluster: a LiteLLM gateway fronting Slurm-managed inference engines—SGLang and vLLM containers among them—on NVIDIA H200 GPUs, with per-engine lifecycle management, versioned container images, and declarative routing that lets a candidate engine receive production-shaped traffic under isolated aliases before it claims any production name. Every time the center onboards a new open-weight model, the platform forces a concrete framework decision, and the wrong one is expensive: as this paper shows, the cost of choosing wrongly reaches 2.3× in throughput—larger than any tuning lever we measured, including correcting an outright misconfiguration (+48% on the dense engine's earlier settings). Manual evaluation is slow and error-prone (framework-specific flags, memory budgets, and validation steps differ), so we *automated* it: the full evaluation protocol—engine scaffolding from each framework's official per-model documentation, dual-framework deployment, controlled benchmarking, verdict recording, and production traffic switching—was encoded as declarative, versioned procedures (which we call *skills*) and executed end-to-end by an LLM-based coding agent, reducing a framework decision to same-day, mostly unattended work.
 
@@ -40,7 +40,7 @@ All experiments were run in September 2026 on the platform described in Section 
 
 **Model architectures under test.** The three models we evaluate span the current design space of efficient open-weight LLMs. Qwen3.8-27B continues the dense hybrid line of Qwen3 [12], combining gated delta net (GDN) linear attention with full attention. Qwen3.8-Flash-Next is an ultra-sparse MoE (180B total, 6B active parameters, 512 experts) with a large N-gram embedding table, in the lineage of DeepSeek-V2/V3's economical MoE and multi-head latent attention (MLA) designs [6, 7]. GLM-5.3-Flash continues the GLM agentic line [13] as a native-FP8, 288-expert MoE (8 experts active per token, one shared expert, first three layers dense) whose 45-layer attention stack interleaves, three-to-one, 34 Kimi Delta Attention (KDA) linear-attention layers—the architecture introduced by Kimi Linear [24]—with 11 DeepSeek Sparse Attention (DSA) layers, plus a 1M-token context window; its closest published relatives include Kimi K2's large sparse-MoE design [14], and serving-side research on KDA-style hybrids is already emerging—recurrent-state compression (DASC) [29], decay-aware mixed-precision state quantization (DAMP) [30], and switchable per-layer mixer placements, including KDA, served from one supernet checkpoint (Super Apriel) [31]. The architectural diversity of this trio is a plausible reason framework rankings might not transfer across models—a hypothesis our results support but cannot isolate, given one model per architecture.
 
-**Speculative decoding.** Speculative sampling accelerates autoregressive decoding by drafting multiple tokens with a cheap proposal mechanism and verifying them in parallel with the target model [3]. Proposal mechanisms include additional decoding heads (Medusa [5]), feature-level draft models with uncertainty handling (EAGLE [4]), and the checkpoint-integrated multi-token prediction (MTP) heads of DeepSeek-V3 [6] and its successors, which both frameworks in this study expose as NEXTN/MTP options. The published literature evaluates speculative decoding primarily as a *latency* optimization at low request concurrency [3, 4, 5], but its behavior under batched serving has been studied: goodput analyses observe that speculation can degrade serving performance when applied without regard to load, and adaptive systems such as TurboSpec close the loop by enabling drafting only when it pays [18]; AdaServe customizes speculation to per-request SLOs [19]. Our contribution is narrower and complementary: a systematic measurement of *checkpoint-integrated* MTP/NEXTN heads across two frameworks and three architectures under saturated production load, where we find drafting to be a net cost in five of six cases.
+**Speculative decoding.** Speculative sampling accelerates autoregressive decoding by drafting multiple tokens with a cheap proposal mechanism and verifying them in parallel with the target model [3]. Proposal mechanisms include additional decoding heads (Medusa [5]), feature-level draft models with uncertainty handling (EAGLE [4]), and the checkpoint-integrated MTP heads of DeepSeek-V3 [6] and its successors, which both frameworks in this study expose as NEXTN/MTP options. The published literature evaluates speculative decoding primarily as a *latency* optimization at low request concurrency [3, 4, 5], but its behavior under batched serving has been studied: goodput analyses observe that speculation can degrade serving performance when applied without regard to load, and adaptive systems such as TurboSpec close the loop by enabling drafting only when it pays [18]; AdaServe customizes speculation to per-request SLOs [19]. Our contribution is narrower and complementary: a systematic measurement of *checkpoint-integrated* MTP/NEXTN heads across two frameworks and three architectures under saturated production load, where we find drafting to be a net cost in five of six cases.
 
 **Empirical comparisons of serving frameworks.** A comparative performance study of vLLM and HuggingFace TGI on LLaMA-2 models (7B–70B) found framework-dependent trade-offs in throughput, latency, and memory [15]; a survey consolidates the broader serving-systems literature [16]; and a large-scale analysis of open-source systems documents which serving frameworks and methods are adopted in practice [17]. The Silent Hyperparameter holds weights and decoding fixed across five backends but measures accuracy reproducibility rather than throughput [25]; SiliconBench evaluates nine Apple Silicon serving engines on unified-memory desktop hardware, using CUDA vLLM and SGLang as references, with fidelity as a first-class metric [26]; and AutoTuneBench has agent systems auto-tune both engines under a measurement protocol stricter than ours (paired seeds, cross-run CV at most 5%) [27]. Relative to these, our study differs in target (saturated production throughput on HPC H200 GPUs), in scope (three 2026 hybrid architectures, including—to our knowledge—the first cross-framework serving comparison of a KDA-hybrid model [24]), and in the object of automation: prior agent work tunes engine configurations [27] or generates bespoke serving stacks from scratch [32], whereas our skills drive the full production lifecycle of an existing production platform, from deployment behind a live gateway to production traffic switching.
 
@@ -171,11 +171,11 @@ Table 8 collects the headline result: the winning framework changed with each mo
 
 | Architecture (model) | Frameworks | Winner | Margin (R1) | Speculative decoding at high concurrency |
 | :--- | :--- | :--- | :---: | :--- |
-| Dense hybrid, 27B (Qwen3.8-27B) | SGLang 0.5.20 vs vLLM 0.29.1rc1 | SGLang | +6.3% | Both negative (−40% / −16%); SGLang also cap 128→48 |
+| Dense hybrid, 27B (Qwen3.8-27B) | SGLang vs vLLM | SGLang | +6.3% | Both negative (−40% / −16%); SGLang also cap 128→48 |
 | Ultra-sparse MoE (Qwen3.8-Flash-Next) | idem | vLLM | 2.33× | SGLang +16%; vLLM −46% |
-| KDA-hybrid MoE (GLM-5.3-Flash) | SGLang 0.5.20 vs vLLM dedicated build | SGLang | +28% | Both negative (−15% / −28%, success 85.6%) |
+| KDA-hybrid MoE (GLM-5.3-Flash) | SGLang vs vLLM (dedicated) | SGLang | +28% | Both negative (−15% / −28%, success 85.6%) |
 
-**Table 8.** Synthesis across the three battles.
+**Table 8.** Synthesis across the three battles. Framework versions as in Table 3: SGLang 0.5.20 throughout; vLLM 0.29.1rc1 on the dense and ultra-sparse MoE models; dedicated vLLM 0.28.1rc1 build on the KDA model.
 
 Two regularities stand out. First, the framework gap was smallest on the well-trodden dense hybrid (6%) and largest on the newer ultra-sparse MoE (2.3×), which may reflect how recently each framework acquired mature kernels for a given architecture—though with one model per architecture we cannot separate this from framework-version and workload differences. Second, in these runs *speculative decoding behaved as a latency tool turned throughput cost under saturation*: in five of the six framework–model pairs, draft-and-verify FLOPs appear not to have been recovered by acceptance gains, consistent with decode batches already binding GPU capacity (we did not measure acceptance lengths or utilization). The single positive case (SGLang NEXTN on the 6B-active MoE) is consistent with this explanation—cheap decodes leave headroom for drafting—rather than contradicting it.
 
@@ -219,6 +219,38 @@ Future work should extend the matrix in six directions: repeat runs with confide
 ## 8 Conclusion
 
 We built a multi-model API service on an HPC cluster—a LiteLLM gateway over Slurm-managed engines on H200 GPUs—and, confronted with the recurring question of which serving framework to assign to each new model, encoded the answer procedure as versioned skills executed by an LLM-based agent: scaffold both frameworks from official documentation, deploy under traffic-isolated aliases, benchmark under work-verified workloads, record the verdict, and switch production traffic when warranted. Applied to three architecturally distinct LLMs, the automated evaluation found that the winning framework changed with each model—SGLang +6.3% (near parity) on a dense hybrid, vLLM by 2.33× on an ultra-sparse MoE, SGLang +28% on a KDA-hybrid MoE—and that speculative decoding on the same checkpoints reduced saturated throughput in five of six framework–model pairs (single-run measurements), a verdict applied to production the same day it was measured. The same agent-driven enclosure diagnosed a mixed-load reliability fault from an encoded symptom-to-cause procedure, raising success from 67.9% to 100%. Together, the results argue for treating framework selection and speculative decoding not as defaults to be inherited but as per-model, per-workload decisions—and for making the measurement that decides them cheap, safe, and repeatable enough to run on every new model, which is precisely what the agent-automated protocol provides.
+
+## AI-Use Disclosure
+
+**Research execution.** The experiments reported in this paper—engine deployment, benchmarking, failure diagnosis, and production traffic switching—were executed by LLM-based coding agents following the versioned procedures ("skills") described in Section 3, under the direction and release decisions of the human authors.
+
+**Literature search and verification.** The literature search, and the verification of every arXiv identifier and author list, were performed by an agent against the arXiv API. This process had a disclosed failure mode: an intermediate reference-conversion pass introduced incorrect author lists in five entries, which were caught and corrected during independent external review—a known transcription-error class for AI-assisted literature verification. Responsibility for reference accuracy rests with the authors.
+
+**Manuscript drafting.** The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; the agent used for the final revision was opencode, powered by GLM-5.3. An independent LLM agent performed six rounds of external review (three adversarial content reviews, two pre-submission checks, and one regression check) whose findings are incorporated above.
+
+**Human role.** Problem framing, platform and release decisions, and verdict approval were made by the human authors, who also secured the funding. The corresponding author is responsible for final verification of the principal numerical results, calculations, and claim–citation links.
+
+**A disclosed limit of this disclosure.** The experimental phases ran across multiple agent sessions whose verbatim prompts and model versions were not preserved as timestamped transcripts; the skills, engine configurations, raw result files, job records, and commit history are released, but this disclosure cannot provide call-by-call detail. Consistent with arXiv and conference policy, no AI system is listed as an author, and the human authors take full responsibility for the manuscript's content.
+
+## Author Contributions
+
+**Chao-Chun Chuang:** Conceptualization, Methodology, Software, Investigation, Formal analysis, and Writing — original draft. **Po-Hsiang Lin:** Investigation, Data curation, Validation, and Writing — review and editing.
+
+## Funding
+
+This work was supported in part by the National Science and Technology Council (NSTC), Taiwan, under Grant Nos. NSTC 115-2410-H-A49-046-MY3 and NSTC 114-2634-F-006-002.
+
+## Competing Interests
+
+The authors declare that they have no competing interests.
+
+## Acknowledgments
+
+The authors gratefully acknowledge the National Center for High-performance Computing (NCHC), National Institutes of Applied Research (NIAR), Taiwan, for providing the research resources, computational infrastructure, and platform services that supported this work.
+
+## Data and Artifact Availability
+
+Raw per-run statistics (JSON) for all configurations in Tables 4–9—except the initial 67.9% mixed run, which is recorded in the platform's operations documentation—are available in `benchmarks/results/` of the platform repository (https://github.com/gemini960114/litellm-proxy). Engine configurations are recorded in `engines/KNOWN_GOOD.md`. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (`.agents/skills/`). The manuscript-writing skills are third-party skills that the repository pins by content hash in `skills-lock.json` but does not redistribute. The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by immutable version tags), and it does not preserve the agent sessions' verbatim prompts.
 
 ## References
 
@@ -287,33 +319,3 @@ We built a multi-model API service on an HPC cluster—a LiteLLM gateway over Sl
 [32] K. Kamahori, S. Li, S. Peter, and B. Kasikci. VibeServe: Can AI Agents Build Bespoke LLM Serving Systems? arXiv:2605.06068, 2026.
 
 ---
-
-*Raw per-run statistics (JSON) for all configurations in Tables 4–9—except the initial 67.9% mixed run, which is recorded in the platform's operations documentation—are available in `benchmarks/results/` of the platform repository (https://github.com/gemini960114/litellm-proxy). Engine configurations are recorded in `engines/KNOWN_GOOD.md`. The evaluation skills (model-onboarding, concurrency-troubleshooting, debug-journaling) are released with the platform repository (`.agents/skills/`). The manuscript-writing skills are third-party skills that the repository pins by content hash in `skills-lock.json` but does not redistribute. The repository is a substantial but not complete replication package: it does not redistribute the model checkpoints or the multi-gigabyte container images (referenced by immutable version tags), and it does not preserve the agent sessions' verbatim prompts.*
-
-## Author Contributions
-
-**Chao-Chun Chuang:** Conceptualization, Methodology, Software, Investigation, Formal analysis, and Writing — original draft. **Po-Hsiang Lin:** Investigation, Data curation, Validation, and Writing — review and editing.
-
-## Funding
-
-This work was supported in part by the National Science and Technology Council (NSTC), Taiwan, under Grant Nos. NSTC 115-2410-H-A49-046-MY3 and NSTC 114-2634-F-006-002.
-
-## Competing Interests
-
-The authors declare that they have no competing interests.
-
-## Acknowledgments
-
-The authors gratefully acknowledge the National Center for High-performance Computing (NCHC), National Institutes of Applied Research (NIAR), Taiwan, for providing the research resources, computational infrastructure, and platform services that supported this work.
-
-## AI-Use Disclosure
-
-**Research execution.** The experiments reported in this paper—engine deployment, benchmarking, failure diagnosis, and production traffic switching—were executed by LLM-based coding agents following the versioned procedures ("skills") described in Section 3, under the direction and release decisions of the human authors.
-
-**Literature search and verification.** The literature search, and the verification of every arXiv identifier and author list, were performed by an agent against the arXiv API. This process had a disclosed failure mode: an intermediate reference-conversion pass introduced incorrect author lists in five entries, which were caught and corrected during independent external review—a known transcription-error class for AI-assisted literature verification. Responsibility for reference accuracy rests with the authors.
-
-**Manuscript drafting.** The drafting and revision of this manuscript, including structural drafting from writing-methodology skills, evidence-alignment auditing, the LaTeX conversion, and BibTeX generation, were produced by agents from the underlying machine-recorded results; the agent used for the final revision was opencode, powered by GLM-5.3. An independent LLM agent performed five rounds of external review (three adversarial content reviews and two pre-submission checks) whose findings are incorporated above.
-
-**Human role.** Problem framing, platform and release decisions, and verdict approval were made by the human authors, who also secured the funding. The corresponding author is responsible for final verification of the principal numerical results, calculations, and claim–citation links.
-
-**A disclosed limit of this disclosure.** The experimental phases ran across multiple agent sessions whose verbatim prompts and model versions were not preserved as timestamped transcripts; the skills, engine configurations, raw result files, job records, and commit history are released, but this disclosure cannot provide call-by-call detail. Consistent with arXiv and conference policy, no AI system is listed as an author, and the human authors take full responsibility for the manuscript's content.

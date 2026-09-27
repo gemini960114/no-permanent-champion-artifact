@@ -43,6 +43,17 @@ docker build（實錄：GLM-5.3-Flash 的 vLLM Recipe 存在，但要求 vLLM 0.
 ＋FlashInfer ≥0.6.17——`check_engine_support.sh` 查的是**我們的 image**，兩者都要查，
 以 Step 6 煙霧測試為最終裁決）。
 
+**使用者直接提供連結時的分工**（任何子集都適用；缺的依上表推導補齊）：
+
+| 輸入 | 用途 | 產出 |
+| :--- | :--- | :--- |
+| HF model card | 模型事實（本 Step 必查欄位）＋官方文件連結 | 硬體結論、框架初判 |
+| vLLM Recipe | **vLLM 參數草案＋最低版本需求＋地雷**（TP/EP 相容、cap 下限、MTP 開關、kernel 版本耦合） | Step 4 的 vLLM 參數表 |
+| SGLang Cookbook | **SGLang 參數草案＋版本需求＋地雷** | Step 4 的 SGLang 參數表 |
+
+三份到齊 → Step 2 實測我們的 image → Step 4 雙框架參數**並列**＋對照組建議。
+參數以兩份官方文件為準，**不要混抄**（同一模型兩框架的 TP/EP/parser/投機解碼設定經常不同）。
+
 ### Step 2：實測引擎支援（跑腳本，別徒手）
 ```bash
 # 於 repo 根目錄執行（或改用絕對路徑 /path/to/work/github/litellm-proxy/...）
@@ -51,7 +62,16 @@ docker build（實錄：GLM-5.3-Flash 的 vLLM Recipe 存在，但要求 vLLM 0.
 # ＋ reasoning-parser 合法選項 (DetectorMap)
 ```
 - 模型檔存在＝必要非充分條件，最終以 Step 6 煙霧測試為準
-- 無原生支援 → 查上游收錄版本，建議重拉 image 並版本釘選（避免 `latest`）
+- **版本決策流（政策 C；「下週出了 0.5.21」情境）**：
+  ```
+  新模型上門 → check_engine_support.sh 查「現有 image」
+    ├─ ✅ 支援   → 沿用現有 SIF（零下載；既有引擎零影響）
+    └─ ❌ 不支援 → 依 Recipe/Cookbook 查「最低支援版本」
+                   → ./pull_image.sh <版本標籤>（新檔名進場，永不覆蓋）
+  既有已驗證引擎 → 一律不自動升級（沿用原版；升級＝自願＋逐一切換＋重新驗證）
+  ```
+  注意「最低支援版本」優先於「最新版」（KNOWN_GOOD 選版原則）——支援在 0.5.20.3
+  就進了卻拉 0.5.21，只是多引入未驗證的變數。
 - **重拉 image 一律走版本政策 C**：`./pull_image.sh <版本標籤>` 輸出新檔名、永不覆蓋既有 SIF（舊版 standby）；引擎切換＝config.env 改 SIF_PATH→validate→更新 KNOWN_GOOD（詳 ENGINE_LIFECYCLE_GUIDE §5）
 
 ### Step 3：硬體適配計算（跑腳本）

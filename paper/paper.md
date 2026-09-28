@@ -1,9 +1,10 @@
 # No Permanent Champion: A Deployment Study of SGLang and vLLM across Dense, Ultra-Sparse MoE, and KDA-Hybrid Architectures on H200 GPUs
 
-**Chao-Chun Chuang**¹\* and **Po-Hsiang Lin**²
+**Chao-Chun Chuang**¹\*, **Po-Hsiang Lin**², and **Liang-Hsun Huang**³
 
 ¹National Center for High-performance Computing (NCHC), National Institutes of Applied Research (NIAR), Taiwan
 ²Kaohsiung Veterans General Hospital, Kaohsiung, Taiwan
+³Twinkle AI, Taiwan
 
 \* Corresponding author: c00cjz00@nchc.org.tw
 
@@ -243,7 +244,7 @@ We built a multi-model API service on an HPC cluster—a LiteLLM gateway over Sl
 
 ## Author Contributions
 
-**Chao-Chun Chuang:** Conceptualization, Methodology, Software, Investigation, Formal analysis, and Writing — original draft. **Po-Hsiang Lin:** Investigation, Data curation, Validation, and Writing — review and editing.
+**Chao-Chun Chuang:** Conceptualization, Methodology, Software, Investigation, Formal analysis, and Writing — original draft. **Po-Hsiang Lin:** Investigation, Data curation, Validation, and Writing — review and editing. **Liang-Hsun Huang:** Validation (checking the manuscript's descriptions of the models' architectures, parameters, and terminology against their official documentation) and Writing — review and editing.
 
 ## Funding
 
